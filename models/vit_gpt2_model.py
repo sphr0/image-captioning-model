@@ -24,10 +24,7 @@ import torch.nn.functional as F
 # ==================================================================
 
 
-# vision Transformer
-# =============================================
-
-# ViT hyperparameters
+# ViT & GPT2 hyperparameters
 
 @dataclass
 class ViTConfig:
@@ -40,6 +37,15 @@ class ViTConfig:
     mlp_ratio: float = 4.0
     drop: float = 0.0
 
+@dataclass
+class GPT2Config:
+    vocab_size: int = 50257
+    n_positions: int = 1024
+    dim: int = 768
+    depth: int = 12
+    heads: int = 12
+    mlp_ratio: float = 4.0
+    drop: float = 0.1
 
 # MHA (modular design for encoder and decoder self-attn AND the decoder cross-attn )
 
@@ -142,4 +148,21 @@ class VisionTransformer(nn.Module):
         return self.norm(x) # (B, 197, dim) — full seq is the cross-attn memory
 
 
-# ===================================================
+# cross-attn bridge
+# ==================================
+
+# cross-attn bridge
+
+class CrossAttentionBridge(nn.Module):
+    """Projects encoder hidden states into the decoder's cross-attn KV space. Dims
+    match here (768->768) so this is effectively a learned re-basing layer — the thing
+    that must train when both towers are frozen, rather than a dimensionality fix."""
+
+    def __init__(self, enc_dim, dec_dim):
+        super().__init__()
+        self.proj = nn.Linear(enc_dim, dec_dim)
+        self.norm = nn.LayerNorm(dec_dim)
+
+    def forward(self, enc):
+        return self.norm(self.proj(enc))
+
