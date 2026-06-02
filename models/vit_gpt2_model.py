@@ -24,7 +24,7 @@ import torch.nn.functional as F
 # ==================================================================
 
 
-# ViT & GPT2 hyperparameters
+# ViT & GPT2 HYPERPARAMETERS
 
 @dataclass
 class ViTConfig:
@@ -104,7 +104,7 @@ class MLP(nn.Module):
         return self.drop(self.fc2(self.drop(F.gelu(self.fc1(x)))))
 
 
-# ViT Block
+# ViT BLOCK
 
 class ViTBlock(nn.Module):
     """Pre-norm(for both MHA and MLP) encoder block."""
@@ -122,7 +122,7 @@ class ViTBlock(nn.Module):
         return x
 
 
-# ViT full model
+# ViT FULL MODEL
 
 class VisionTransformer(nn.Module):
     def __init__(self, cfg: ViTConfig):
@@ -148,10 +148,8 @@ class VisionTransformer(nn.Module):
         return self.norm(x) # (B, 197, dim) — full seq is the cross-attn memory
 
 
-# cross-attn bridge
+# CROSS-ATTN BRIDGE
 # ==================================
-
-# cross-attn bridge
 
 class CrossAttentionBridge(nn.Module):
     """Projects encoder hidden states into the decoder's cross-attn KV space. Dims
@@ -166,3 +164,49 @@ class CrossAttentionBridge(nn.Module):
     def forward(self, enc):
         return self.norm(self.proj(enc))
 
+
+# GPT-2 DECODER
+# ===================================
+
+class GPT2Block(nn.Module):
+    """GPT-2 block with cross-attention inserted between masked self-attn and MLP.
+    Sublayer order per block: self-attn (causal) -> cross-attn -> MLP, all pre-norm."""
+
+    def __init__(self, cfg: GPT2Config):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(cfg.dim)
+        self.self_attn = MultiHeadAttention(cfg.dim, cfg.heads, cfg.drop)
+        self.ln_cross = nn.LayerNorm(cfg.dim)
+        self.cross_attn = MultiHeadAttention(cfg.dim, cfg.heads, cfg.drop)
+        self.ln2 = nn.LayerNorm(cfg.dim)
+        self.mlp = MLP(cfg.dim, cfg.mlp_ratio, cfg.drop)
+
+    def forward(self, x, memory, mem_mask=None):
+        x = x + self.self_attn(self.ln1(x), causal=True)
+        x = x + self.cross_attn(self.ln_cross(x), memory, key_padding_mask=mem_mask)
+        x = x + self.mlp(self.ln2(x))
+        return x
+
+
+class GPT2Decoder(nn.Module):
+    def __init__(self, cfg: GPT2Config):
+        super().__init__()
+        self.cfg = cfg
+        self.wte = nn.Embedding(cfg.vocab_size, cfg.dim)
+        self.wpe = nn.Embedding(cfg.n_positions, cfg.dim)
+        self.drop = nn.Dropout(cfg.drop)
+        self.blocks = nn.ModuleList([GPT2Block(cfg) for _ in range(cfg.depth)])
+        self.ln_f = nn.LayerNorm(cfg.dim)
+        self.lm_head = nn.Linear(cfg.dim, cfg.vocab_size, bias=False)
+        self.lm_head.weight = self.wte.weight # weight tying
+
+    def forward(self, input_ids, memory, mem_mask=None):
+        T = input_ids.shape[1]
+        pos = torch.arange(T, device=input_ids.device)
+        x = self.drop(self.wte(input_ids) + self.wpe(pos)[None])
+        for blk in self.blocks:
+            x = blk(x, memory, mem_mask)
+        return self.lm_head(self.ln_f(x)) # (B, T, vocab)
+
+
+# ===================================
