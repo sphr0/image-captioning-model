@@ -1,15 +1,13 @@
 
 """
-vit_gpt2_model.py
-
 ViT-GPT2 image captioning, two parallel implementations:
 
-  PART 1 - from scratch (educational): ViT-B/16 encoder -> linear cross-attention
-    bridge -> GPT-2 decoder with PER-LAYER cross-attention. Not meant
+  1. from scratch: ViT-B/16 encoder -> linear cross-attn
+    bridge -> GPT-2 decoder with PER-LAYER cross-attn. Not meant
     for training.
 
-  PART 2 - transfer learning (actual use): VisionEncoderDecoderModel with pretrained
-    ViT + GPT-2. HF injects the cross-attention.
+  2. transfer learning (actual use): VisionEncoderDecoderModel with pretrained
+    ViT + GPT-2. HF injects the cross-attn.
 """
 
 from dataclasses import dataclass
@@ -152,9 +150,8 @@ class VisionTransformer(nn.Module):
 # ==================================
 
 class CrossAttentionBridge(nn.Module):
-    """Projects encoder hidden states into the decoder's cross-attn KV space. Dims
-    match here (768->768) so this is effectively a learned re-basing layer — the thing
-    that must train when both towers are frozen, rather than a dimensionality fix."""
+    """Projects encoder hidden states into the decoder's cross-attn KV space. Dim:
+    768->768. the thing that must be trained when both towers are frozen, rather than a dimensionality fix."""
 
     def __init__(self, enc_dim, dec_dim):
         super().__init__()
@@ -169,7 +166,7 @@ class CrossAttentionBridge(nn.Module):
 # ===================================
 
 class GPT2Block(nn.Module):
-    """GPT-2 block with cross-attention inserted between masked self-attn and MLP.
+    """GPT-2 block with cross-attn inserted between masked self-attn and MLP.
     Sublayer order per block: self-attn (causal) -> cross-attn -> MLP, all pre-norm."""
 
     def __init__(self, cfg: GPT2Config):
@@ -274,3 +271,56 @@ class ViTGPT2FromScratch(nn.Module):
             if done.all():
                 break
         return ids
+
+# ===========================================================================
+# PART 2 - HF MODEL
+# ===========================================================================
+
+from transformers import VisionEncoderDecoderModel, ViTImageProcessor, AutoTokenizer
+ 
+ 
+def build_vit_gpt2_pretrained(ckpt="nlpconnect/vit-gpt2-image-captioning", device="cpu"):
+    """Encoder, decoder, AND cross-attention all pretrained. Use for inference and as
+    the ViT-GPT2 entry in the three-way comparison."""
+    model = VisionEncoderDecoderModel.from_pretrained(ckpt).to(device).eval()
+    image_processor = ViTImageProcessor.from_pretrained(ckpt)
+    tokenizer = AutoTokenizer.from_pretrained(ckpt)
+    return model, image_processor, tokenizer
+ 
+ 
+def build_vit_gpt2_for_finetune(
+    encoder_ckpt="google/vit-base-patch16-224-in21k",
+    decoder_ckpt="gpt2",
+    device="cpu",
+    freeze_encoder=True,
+):
+    """A fresh encoder-decoder from two pretrained towers. HF injects
+    randomly-initialized cross-attention into GPT-2; both towers are 768-dim so no
+    enc->dec projection needed. With freeze_encoder=True only
+    cross-attn + GPT-2 train"""
+    # Only need to train GPT2 and cross-attn layers
+    
+    model = VisionEncoderDecoderModel.from_encoder_decoder_pretrained(encoder_ckpt, decoder_ckpt)
+    tokenizer = AutoTokenizer.from_pretrained(decoder_ckpt)
+    image_processor = ViTImageProcessor.from_pretrained(encoder_ckpt)
+ 
+    # GPT-2 ships without pad token
+    tokenizer.pad_token = tokenizer.eos_token
+    model.config.decoder_start_token_id = tokenizer.bos_token_id
+    model.config.pad_token_id = tokenizer.pad_token_id
+    model.config.eos_token_id = tokenizer.eos_token_id
+    model.config.vocab_size = model.config.decoder.vocab_size
+ 
+    if freeze_encoder:
+        for p in model.encoder.parameters():
+            p.requires_grad_(False)
+ 
+    return model.to(device), image_processor, tokenizer
+ 
+ 
+@torch.no_grad()
+def caption(model, image_processor, tokenizer, images, device="cpu",
+            max_length=30, num_beams=4, **gen):
+    pixel_values = image_processor(images=images, return_tensors="pt").pixel_values.to(device)
+    out = model.generate(pixel_values, max_length=max_length, num_beams=num_beams, **gen)
+    return tokenizer.batch_decode(out, skip_special_tokens=True)
