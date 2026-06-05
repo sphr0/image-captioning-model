@@ -210,3 +210,67 @@ class GPT2Decoder(nn.Module):
 
 
 # ===================================
+
+class ViTGPT2FromScratch(nn.Module):
+
+    # build the 3 main pieces and run _init on every layer
+    def __init__(self, vit_cfg=ViTConfig(), gpt_cfg=GPT2Config()):
+        super().__init__()
+        self.encoder = VisionTransformer(vit_cfg)
+        self.bridge = CrossAttentionBridge(vit_cfg.dim, gpt_cfg.dim)
+        self.decoder = GPT2Decoder(gpt_cfg)
+        self.apply(self._init)
+ 
+
+    # if linear layer, fill weight with random num AND set bias to 0
+    # if lookup table (Embedding), fill with random num
+    @staticmethod
+    def _init(m):
+        if isinstance(m, nn.Linear):
+            nn.init.normal_(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+        elif isinstance(m, nn.Embedding):
+            nn.init.normal_(m.weight, std=0.02)
+ 
+    def forward(self, pixel_values, input_ids, labels=None):
+        """labels: copy of input_ids with pad positions set to -100. The next-token
+        shift is applied internally (teacher forcing)."""
+        memory = self.bridge(self.encoder(pixel_values)) # run img thru enc and bridge
+        logits = self.decoder(input_ids, memory) # run caption through dec along with memory(img features)
+        loss = None
+        if labels is not None: # calculate loss only on training (true captions)
+            loss = F.cross_entropy(
+                logits[:, :-1].reshape(-1, logits.size(-1)),
+                labels[:, 1:].reshape(-1),
+                ignore_index=-100,
+            )
+        return {"logits": logits, "loss": loss}
+ 
+    @torch.no_grad()
+    def generate(self, pixel_values, bos_id, eos_id, max_len=30,
+                 temperature=1.0, top_k=None):
+        """Un-cached decode (O(T^2) — fine for caption lengths). Memory is encoded once."""
+        self.eval()
+        memory = self.bridge(self.encoder(pixel_values)) # img -> enc -> bridge
+        B = pixel_values.size(0) # no. of imgs in batch
+        ids = torch.full((B, 1), bos_id, dtype=torch.long, device=pixel_values.device) # captions made of bos
+        done = torch.zeros(B, dtype=torch.bool, device=pixel_values.device) # done flag per caption
+
+        # Word generation
+        for _ in range(max_len):
+            logits = self.decoder(ids, memory)[:, -1]
+            if temperature > 0: # random-sampling mode (best word has highest chance)
+                logits = logits / temperature
+                if top_k is not None:
+                    v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                    logits = logits.masked_fill(logits < v[:, [-1]], float("-inf"))
+                nxt = torch.multinomial(F.softmax(logits, dim=-1), 1)
+            else:
+                nxt = logits.argmax(-1, keepdim=True) # greedy mode
+            nxt = nxt.masked_fill(done.unsqueeze(1), eos_id)
+            ids = torch.cat([ids, nxt], dim=1)
+            done |= nxt.squeeze(1) == eos_id
+            if done.all():
+                break
+        return ids
