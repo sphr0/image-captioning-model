@@ -32,6 +32,8 @@ class BLIPConfig:
     vit_layers: int = 12
     vit_heads: int = 12
     # BERT-base
+    dropout: float = 0.1
+    mpl_ratio: int = 4
     # heads / misc will add  later... [TODO] 
 
 
@@ -72,5 +74,53 @@ class MHA(nn.Module):
       q, k, v, attn_mask=attn_mask, dropout_p=(self.p if self.training else 0.0))
     o = o.transpose(1, 2).reshape(B, -1, self.h * self.d) # undo the _split
     return self.proj(o)
+
+
+class PatchEmbed(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.proj = nn.Conv2d(in_channels=3,
+         out_channels=cfg.vit_width,
+          kernel_size=cfg.patch_size,
+           stride=cfg.patch_size) # 14x14 patches
+
+    def forward(self, x):
+        return self.proj(x).flatten(2).transpose(1, 2) #[B,3,H,W] -> [B,N,C] B x 196 x 768 
+
+
+class ViTBlock(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        w = cfg.vit_width
+        self.norm1, self.norm2 = nn.LayerNorm(w), nn.LayerNorm(w)
+        self.attn = MHA(dim=w, n_heads=cfg.vit_heads, dropout=cfg.dropout)
+        self.mlp = nn.Sequential(nn.Linear(in_features=w, out_features=cfg.mlp_ratio * w),
+                                nn.GELU(),
+                                nn.Linear(in_features=cfg.mlp_ratio * w, out_features=w))
+
+    def forward(self, x):
+        x = x + self.attn(self.norm1(x))
+        return x + self.mlp(self.norm2(x)) # pre & post-norm
+
+
+class VisionTransformer(nn.Module): # [B,3,H,W] -> [B,N+1,W] img embeds
+    def __init__(self, cfg):
+        super().__init__()
+        n = (cfg.image_size // cfg.patch_size) ** 2
+        self.patch_embed = PatchEmbed(cfg)
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, cfg.vit_width))
+        self.pos_embed = nn.Parameter(torch.zeros(1, n + 1, cfg.vit_width))
+        self.blocks = nn.ModuleList([ViTBlock(cfg) for _ in range(cfg.vit_layers)]) # 12 ViT layers
+        self.norm = nn.LayerNorm(cfg.vit_width)
+        nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        nn.init.trunc_normal_(self.cls_token, std=0.02)
+
+    def forward(self, pixel_values):
+        B = pixel_values.size(0)
+        x = self.patch_embed(pixel_values)
+        x = torch.cat([self.cls_token.expand(B, -1, -1), x], 1) + self.pos_embed
+        for blk in self.blocks:
+            x = blk(x)
+        return self.norm(x)
 
 
