@@ -10,11 +10,10 @@ ViT-GPT2 image captioning, two parallel implementations:
     ViT + GPT-2. HF injects the cross-attn.
 """
 
-from dataclasses import dataclass
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from dataclasses import dataclass
 
 
 # ==================================================================
