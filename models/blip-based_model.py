@@ -50,3 +50,27 @@ def _sa_mask(pad, mode, L, device):
 def _cross_mask(img_mask): #
   return None if img_mask is None else img_mask.bool()[:, None, None, :]
 
+class MHA(nn.Module):
+  def __init__(self, dim, n_heads, dropout):
+    super().__init__()
+    assert dim % n_heads == 0
+    self.h, self.d = n_heads, dim // n_heads # d = dim per head
+    self.q = nn.Linear(dim, dim)
+    self.kv = nn.Linear(dim, dim * 2)
+    self.proj = nn.Linear(dim, dim)
+    self.p = dropout # p = dropout probability
+
+  def _split(self, x, B):
+    return x.view(B, -1, self.h, self.d).transpose(1, 2) # [B,h,L,d]
+  
+  def forward(self, x, kv=None, attn_mask=None):
+    B = x.size(0)
+    ctx = x if kv is None else kv # supports both SA and cross
+    q = self._split(self.q(x), B)
+    k, v = (t for t in self.kv(ctx).chunk(2, dim=-1)) # seperates k from v
+    o = F.scaled_dot_product_attention(
+      q, k, v, attn_mask=attn_mask, dropout_p=(self.p if self.training else 0.0))
+    o = o.transpose(1, 2).reshape(B, -1, self.h * self.d) # undo the _split
+    return self.proj(o)
+
+
