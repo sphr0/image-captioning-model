@@ -144,7 +144,7 @@ class VisionTransformer(nn.Module): # [B,3,H,W] -> [B,N+1,W] img embeds
 # TEXT TOWER
 # =====================================================
 
-class BertEmbedding(nn.Module):
+class BertEmbeddings(nn.Module):
   def __init__(self, cfg):
     super().__init__()
     self.word = nn.Embedding(cfg.vocab_size,
@@ -187,3 +187,18 @@ class BertLayer(nn.Module):
       x = self.norm_ca(x + self.cross(x, kv=img, attn_mask=img_mask)) # no ca needed for text
     return self.norm_ffn(x + self.ffn(x))
 
+class TextTransformer(nn.Module):
+  def __init__(self, cfg):
+    super().__init__()
+    self.embeddings = BertEmbeddings(cfg)
+    self.layers = nn.ModuleList(
+      [BertLayer(cfg) for _ in range(cfg.text_layers)])
+    
+  def forward(self, ids, mode, attn_mask=None, image_embeds=None, image_mask=None):
+    x = self.embeddings(ids)
+    sa = _sa_mask(pad=attn_mask, mode=mode, L=x.size(1), device=x.device)
+    ca = _cross_mask(img_mask=image_mask)
+    for layer in self.layers:
+      x = layer(x, mode, sa_mask=sa, img=image_embeds, img_mask=ca)
+    return x
+    
