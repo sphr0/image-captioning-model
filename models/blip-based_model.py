@@ -20,7 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
 
-
+# ==========================
 # CONFIG
 
 @dataclass
@@ -32,12 +32,24 @@ class BLIPConfig:
     vit_layers: int = 12
     vit_heads: int = 12
     # BERT-base
+    vocab_size: int = 30524 # 30522+[DEC]+[ENC]
+    text_width: int = 768
+    text_layers: int = 12
+    text_heads: int = 12
+    max_text_len: int = 40
+    # heads / misc
+    embed_dim: int = 256 # ITC projection dim
+    mlp_ratio: int = 4
     dropout: float = 0.1
-    mpl_ratio: int = 4
-    # heads / misc will add  later... [TODO] 
+    label_smoothing: float = 0.1
+    pad_token_id: int = 0
+    cls_token_id: int = 101
+    eos_token_id: int = 102 # SEP
+    bos_token_id: int = 30522 # decoder BOS
+    enc_token_id: int = 30523 # ITM task token
 
-
-# private functions
+# ==========================
+# PRIVATE FUNCTIONS
 
 def _sa_mask(pad, mode, L, device):
   # if given padding, we only add dims for head and query to pad, else we make the whole thing
@@ -51,6 +63,10 @@ def _sa_mask(pad, mode, L, device):
 
 def _cross_mask(img_mask): #
   return None if img_mask is None else img_mask.bool()[:, None, None, :]
+
+# ===================================================
+# VISION TOWER
+# ===================================================
 
 class MHA(nn.Module):
   def __init__(self, dim, n_heads, dropout):
@@ -123,4 +139,27 @@ class VisionTransformer(nn.Module): # [B,3,H,W] -> [B,N+1,W] img embeds
             x = blk(x)
         return self.norm(x)
 
+
+# =====================================================
+# TEXT TOWER
+# =====================================================
+
+class BertEmbedding(nn.Module):
+  def __init__(self, cfg):
+    super().__init__()
+    self.word = nn.Embedding(cfg.vocab_size,
+                             cfg.text_width,
+                             padding_idx=cfg.pad_token_id) # initial padding grad = 0 and no learning
+    self.pos = nn.Embedding(cfg.max_text_len, 
+                            cfg.text_width)
+    self.norm = nn.LayerNorm(cfg.text_width)
+    self.drop = nn.Dropout(cfg.dropout)
+    self.register_buffer("pos_ids",
+                         torch.arange(cfg.max_text_len)[None],
+                         persistent=False)
+  
+  def forward(self, ids):
+    L = ids.size(1)
+    x = self.word(ids) + self.pos(self.pos_ids[:, :L])
+    return self.drop(self.norm(x))
 
