@@ -154,7 +154,7 @@ class BertEmbedding(nn.Module):
                             cfg.text_width)
     self.norm = nn.LayerNorm(cfg.text_width)
     self.drop = nn.Dropout(cfg.dropout)
-    self.register_buffer("pos_ids",
+    self.register_buffer("pos_ids", # prevents re-creating the same pos_ids on each cycle
                          torch.arange(cfg.max_text_len)[None],
                          persistent=False)
   
@@ -162,4 +162,28 @@ class BertEmbedding(nn.Module):
     L = ids.size(1)
     x = self.word(ids) + self.pos(self.pos_ids[:, :L])
     return self.drop(self.norm(x))
+
+class BertLayer(nn.Module):
+  """SA(bi or causal) -> cross attn -> FFN.
+  """
+  def __init__(self, cfg):
+    super().__init__()
+    w = cfg.text_width
+    self.sa_bi = MHA(w, cfg.text_heads, cfg.dropout)
+    self.sa_caus = MHA(w, cfg.text_heads, cfg.dropout)
+    self.norm_sa = nn.LayerNorm(w)
+    self.cross = MHA(w, cfg.text_heads, cfg.dropout)
+    self.norm_ca = nn.LayerNorm(w)
+    self.ffn = nn.Sequential(
+      nn.Linear(w, cfg.mlp_ratio * w),
+      nn.GELU(),
+      nn.Linear(cfg.mlp_ratio * w, w))
+    self.norm_ffn = nn.LayerNorm(w)
+
+  def forward(self, x, mode, sa_mask=None, img=None, img_mask=None):
+    sa = self.sa_caus if mode == "multimodal_dec" else self.sa_bi
+    x = self.norm_sa(x + sa(x, attn_mask=sa_mask))
+    if mode in ("multimodal_dec", "multimodal_enc"):
+      x = self.norm_ca(x + self.cross(x, kv=img, attn_mask=img_mask)) # no ca needed for text
+    return self.norm_ffn(x + self.ffn(x))
 
