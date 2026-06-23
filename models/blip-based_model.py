@@ -205,7 +205,7 @@ class TextTransformer(nn.Module):
     return x
 
 
-# =====================================
+# ================================
 # SUB-MODULES INIT WEIGHTS
 
 def _init_bert_weights(m):
@@ -242,3 +242,24 @@ class BLIPFromScratch(nn.Module):
     self.lm_head = nn.Linear(cfg.text_width, cfg.vocab_size, bias=False)
     self.apply(_init_bert_weights) # applies to all submodules not just LM
     self.lm_head.weight = self.text.embeddings.word.weight
+
+  # ========< ENCODERS >========
+  def encode_image(self, pixel_val):
+    embeds = self.visual(pixel_val) # [B, N+1, W]
+    feat = F.normalize(self.vision_proj(embeds[:, 0]), dim=-1) # only cls tokens for ITC
+    return embeds, feat
+
+  def encode_text(self, input_ids, attn_mask): # for ITC (unimodal)
+    h = self.text(input_ids, mode='text', attn_mask=attn_mask) # this is unused by this architecture
+    feat = F.normalize(self.text_proj(h[:, 0]), dim=-1)
+    return h, feat
+
+# ========< OBJECTIVE LOSSES >========
+def loss_itc(self, img_feat, txt_feat):
+  logits = img_feat @ txt_feat.t() / self.temp.clamp(min=1e-3) # similarity / temp
+  # we divide by temp to help values spread after softmax.
+  # clamp prevents values getting too close to 0.
+  # REMINDER: normalized vectors only need the dot product operator to calculate cosine similarity
+  labels = torch.arange(logits.size(0), device=logits.device)
+  return (F.cross_entropy(logits, labels) +
+         F.cross_entropy(logits.t(), labels)) / 2 # bidirectional -> we take avg
