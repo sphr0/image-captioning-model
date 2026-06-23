@@ -163,6 +163,7 @@ class BertEmbeddings(nn.Module):
     x = self.word(ids) + self.pos(self.pos_ids[:, :L])
     return self.drop(self.norm(x))
 
+
 class BertLayer(nn.Module):
   """SA(bi or causal) -> cross attn -> FFN.
   """
@@ -187,6 +188,7 @@ class BertLayer(nn.Module):
       x = self.norm_ca(x + self.cross(x, kv=img, attn_mask=img_mask)) # no ca needed for text
     return self.norm_ffn(x + self.ffn(x))
 
+
 class TextTransformer(nn.Module):
   def __init__(self, cfg):
     super().__init__()
@@ -201,4 +203,42 @@ class TextTransformer(nn.Module):
     for layer in self.layers:
       x = layer(x, mode, sa_mask=sa, img=image_embeds, img_mask=ca)
     return x
-    
+
+
+# =====================================
+# SUB-MODULES INIT WEIGHTS
+
+def _init_bert_weights(m):
+  if isinstance(m, nn.Linear): # set linear weights to have mean=0 and std=0.02. bias also 0
+    nn.init.normal_(m.weight, std=0.02)
+    if m.bias is not None:
+      nn.init.zeros_(m.bias)
+  elif isinstance(m, nn.Embedding): # same thing with embedding layers
+    nn.init.normal_(m.weight, std=0.02) # overwrites padding_idx. must be zeroed again.
+    if m.padding_idx is not None:
+      with torch.no_grad():
+        m.weight[m.padding_idx].zero_() # zero out [pad] embedding
+  elif isinstance(m, nn.LayerNorm): # y = (x-mean) / std*[w=1] + [b=0] -> y=normalized(x)
+    nn.init.zeros_(m.bias)
+    nn.init.ones_(m.weight)
+
+
+# ================================
+# FULL MODEL CLASS
+
+class BLIPFromScratch(nn.Module):
+  def __init__(self, cfg:BLIPConfig=BLIPConfig()):
+    self.cfg = cfg
+    # MAIN TOWERS
+    self.visual = VisionTransformer(cfg=cfg)
+    self.text = TextTransformer(cfg=cfg)
+    # ITC
+    self.vision_proj = nn.Linear(cfg.vit_width, cfg.embed_dim)
+    self.text_proj = nn.Linear(cfg.text_width, cfg.embed_dim) # map both to embed dim
+    self.temp = nn.Parameter(torch.tensor(0.07)) # CLIP's temp. model fine-tunes it.
+    # ITM (match, no-match)
+    self.itm_head = nn.Linear(cfg.text_width, 2)
+    # LM (weight-tied to word embeddings)
+    self.lm_head = nn.Linear(cfg.text_width, cfg.vocab_size, bias=False)
+    self.apply(_init_bert_weights) # applies to all submodules not just LM
+    self.lm_head.weight = self.text.embeddings.word.weight
