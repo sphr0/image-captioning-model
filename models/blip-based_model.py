@@ -293,3 +293,21 @@ class BLIPFromScratch(nn.Module):
     labels = torch.cat([torch.ones(B, device=dev),
                         torch.zeros(2 * B, device=dev)]).long()
     return F.cross_entropy(logits, labels)
+
+  def loss_lm(self, img_embeds, input_ids, attn_mask):
+    dev = img_embeds.device
+    img_mask = torch.ones(img_embeds.shape[:2], device=dev)
+    ids = input_ids.clone()
+    ids[:, 0] = self.cfg.bos_token_id
+    h = self.text(ids=ids,
+                  mode="multimodal_dec",
+                  attn_mask=attn_mask,
+                  image_embeds=img_embeds,
+                  image_mask=img_mask)
+    logits = self.lm_head(h)
+    labels = ids.masked_fill(attn_mask == 0, -100)
+    return F.cross_entropy( # predict token t from before t
+      logits[:, :-1].reshape(-1, logits.size(-1)),
+      labels[:, 1:].reshape(-1),
+      ignore_index=-100,
+      label_smoothing=self.cfg.label_smoothing)
