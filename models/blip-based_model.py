@@ -254,22 +254,22 @@ class BLIPFromScratch(nn.Module):
     feat = F.normalize(self.text_proj(h[:, 0]), dim=-1)
     return h, feat
 
-# ========< OBJECTIVE LOSSES >========
-def loss_itc(self, img_feat, txt_feat):
-  logits = img_feat @ txt_feat.t() / self.temp.clamp(min=1e-3) # similarity / temp
-  # we divide by temp to help values spread out after softmax.
-  # clamp prevents values getting too close to 0.
-  # REMINDER: normalized vectors only need the dot product operator to calculate cosine similarity
-  labels = torch.arange(logits.size(0), device=logits.device)
-  return (F.cross_entropy(logits, labels) +
-         F.cross_entropy(logits.t(), labels)) / 2 # bidirectional -> we take avg
+  # ========< OBJECTIVE LOSSES >========
+  def loss_itc(self, img_feat, txt_feat):
+    logits = img_feat @ txt_feat.t() / self.temp.clamp(min=1e-3) # similarity / temp
+    # we divide by temp to help values spread out after softmax.
+    # clamp prevents values getting too close to 0.
+    # REMINDER: normalized vectors only need the dot product operator to calculate cosine similarity
+    labels = torch.arange(logits.size(0), device=logits.device)
+    return (F.cross_entropy(logits, labels) +
+          F.cross_entropy(logits.t(), labels)) / 2 # bidirectional -> we take avg
 
-@torch.no_grad() # since we're just sampling (no inference mode though)
-def _hard_negatives(self, img_feat, txt_feat):
-  sim = img_feat @ txt_feat.t() # similarity tbale [B, B]
-  eye = torch.eye(sim.size(0), dtype=torch.bool, device=sim.device) # to mask correct pairs
-  w_i2t = sim.masked_fill(eye, -1e4).softmax(1) # high-similarity wrong text probabilities
-  w_t2i = sim.t().masked_fill(eye, -1e4).softmax(1)
-  neg_txt = torch.multinomial(w_i2t, 1).squeeze(1) # random sample with a bias towards highest
-  neg_img = torch.multinomial(w_t2i, 1).squeeze(1)
-  return neg_img, neg_txt
+  @torch.no_grad() # since we're just sampling (no inference mode though)
+  def _hard_negatives(self, img_feat, txt_feat):
+    sim = img_feat @ txt_feat.t() # similarity tbale [B, B]
+    eye = torch.eye(sim.size(0), dtype=torch.bool, device=sim.device) # to mask correct pairs
+    w_i2t = sim.masked_fill(eye, -1e4).softmax(1) # high-similarity wrong text probabilities
+    w_t2i = sim.t().masked_fill(eye, -1e4).softmax(1)
+    neg_txt = torch.multinomial(w_i2t, 1).squeeze(1) # random sample with a bias towards highest
+    neg_img = torch.multinomial(w_t2i, 1).squeeze(1)
+    return neg_img, neg_txt
