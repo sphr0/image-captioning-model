@@ -273,3 +273,23 @@ class BLIPFromScratch(nn.Module):
     neg_txt = torch.multinomial(w_i2t, 1).squeeze(1) # random sample with a bias towards highest
     neg_img = torch.multinomial(w_t2i, 1).squeeze(1)
     return neg_img, neg_txt
+
+  def loss_itm(self, img_embeds, img_feat, txt_feat, input_ids, attn_mask):
+    B, dev = img_embeds.size(0), img_embeds.device
+    img_mask = torch.ones(img_embeds.shape[:2], device=dev) # no mask
+    ids = input_ids.clone()
+    ids[:, 0] = self.cfg.enc_token_id
+    neg_img, neg_txt = self._hard_negatives(img_feat, txt_feat)
+    ids_all = torch.cat([ids, ids, ids[neg_txt]], 0)
+    am_all = torch.cat([attn_mask, attn_mask, attn_mask[neg_img]], 0)
+    img_all = torch.cat([img_embeds, img_embeds[neg_img], img_embeds], 0)
+    imsk_all = torch.cat([img_feat, img_feat[neg_img], img_feat], 0)
+    h = self.text(ids=ids_all,
+                  mode="multimodal_enc",
+                  attn_mask=am_all,
+                  image_embed=img_all,
+                  image_mask=imsk_all)
+    logits = self.itm_head(h[:, 0])
+    labels = torch.cat([torch.ones(B, device=dev),
+                        torch.zeros(2 * B, device=dev)]).long()
+    return F.cross_entropy(logits, labels)
