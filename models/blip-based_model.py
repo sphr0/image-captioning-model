@@ -322,4 +322,41 @@ class BLIPFromScratch(nn.Module):
       "itm": l_itm.item(),
       "lm": l_lm.item()}
 
-# CAPTIONING INTERFACE (decoder)
+# CAPTIONING INTERFACE (LM decoder)
+  @torch.no_grad()
+  def generate(self, pixel_val, max_len=30, sample=False, top_k=0, temperature=1.0):
+    # sample: False-> pick the best token(greedy) | True: sample from probability distribution
+    # top_k: only top k tokens allowed to be in prob distribution (used when sample=True)
+    was_training = self.training # save the state model is in so we turn it back to how it was
+    self.eval() # disables Dropout layers
+    img_embeds = self.visual(pixel_val)
+    img_mask = torch.ones(img_embeds.shape[:2], device=img_embeds.device)
+    B = img_embeds.size(0)
+    # initial token sequence [B, 1] with starting token of [BOS]
+    ids = torch.full((B, 1), self.cfg.bos_token_id,
+                      dtype=torch.long,
+                      device=img_embeds.device) # will be filled on generation loop
+    done = torch.zeros(B, dtype=torch.bool, device=img_embeds.device) # tracks if seq is done
+    for _ in range(max_len): # generation loop
+      h = self.text(ids=ids,
+                    mode="multimodal_dec",
+                    attn_mask=None,
+                    image_embeds=img_embeds,
+                    image_mask=img_mask) # [B,current_seq_length] -> [B,current...,text_width(768)]
+      # <NOTE> no KV cache, so the whole seq is processed on each step. insignificant for short caption
+      logits = self.lm_head(h[:, -1]) # [B, txt_width] -> [B, vocab_size]
+      if sample:
+        if top_k > 0:
+          kth = logits.topk(top_k, 1).values[:, -1, None] # keep only the top k likely tokens
+          logits = logits.masked_fill(logits < kth, float("-inf")) # turn the rest to -inf
+        nxt = torch.multinomial((logits / temperature).softmax(-1), 1).squeeze(1) # [B, 1] -> [B]
+      else: # greedy decoding
+        nxt = logits.argmax(-1)
+      nxt = nxt.masked_fill(done, self.cfg.pad_token_id) # replace token with padding if seq aleady done
+      ids = torch.cat([ids, nxt[:, None]], -1) # append generated tokens
+      done = |= nxt == self.cfg.eos_token_id # mark seq as done if it ended with [EOS]
+      if done.all():
+        break
+    if was_training: # set back to the state it was
+      self.train()
+    return ids
