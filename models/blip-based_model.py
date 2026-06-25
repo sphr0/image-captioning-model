@@ -48,6 +48,7 @@ class BLIPConfig:
     bos_token_id: int = 30522 # decoder BOS
     enc_token_id: int = 30523 # ITM task token
 
+
 # ==========================
 # PRIVATE FUNCTIONS
 
@@ -59,7 +60,6 @@ def _sa_mask(pad, mode, L, device):
     causal = torch.ones(L, L, device=device).tril().bool()[None, None] # [1, 1, L, L]
     return key & causal # both cuasal and padding in a bool tensor
   return key
-
 
 def _cross_mask(img_mask): #
   return None if img_mask is None else img_mask.bool()[:, None, None, :]
@@ -204,7 +204,6 @@ class TextTransformer(nn.Module):
       x = layer(x, mode, sa_mask=sa, img=image_embeds, img_mask=ca)
     return x
 
-
 # ================================
 # SUB-MODULES INIT WEIGHTS
 
@@ -221,7 +220,6 @@ def _init_bert_weights(m):
   elif isinstance(m, nn.LayerNorm): # y = (x-mean) / std*[w=1] + [b=0] -> y=normalized(x)
     nn.init.zeros_(m.bias)
     nn.init.ones_(m.weight)
-
 
 # ================================
 # FULL MODEL CLASS
@@ -312,7 +310,6 @@ class BLIPFromScratch(nn.Module):
       ignore_index=-100,
       label_smoothing=self.cfg.label_smoothing)
 
-
 # PRE-TRAINING FORWARD (ITC + ITM + LM)
   def forward(self, pixel_val, input_ids, attn_mask):
     img_embeds, img_feat = self.encode_image(pixel_val)
@@ -324,3 +321,5 @@ class BLIPFromScratch(nn.Module):
       "itc": l_itc.item(),
       "itm": l_itm.item(),
       "lm": l_lm.item()}
+
+# CAPTIONING INTERFACE (decoder)
