@@ -311,3 +311,16 @@ class BLIPFromScratch(nn.Module):
       labels[:, 1:].reshape(-1),
       ignore_index=-100,
       label_smoothing=self.cfg.label_smoothing)
+
+
+# PRE-TRAINING FORWARD (ITC + ITM + LM)
+  def forward(self, pixel_val, input_ids, attn_mask):
+    img_embeds, img_feat = self.encode_image(pixel_val)
+    _, txt_feat = self.encode_text(input_ids, attn_mask) # returns unimodal h, which we dispose of.
+    l_itc = self.loss_itc(img_feat=img_feat, txt_feat=txt_feat)
+    l_itm = self.loss_itm(img_embeds, img_feat, txt_feat, input_ids, attn_mask)
+    l_lm = self.loss_lm(img_embeds, input_ids, attn_mask)
+    return l_itc + l_itm + l_lm, {
+      "itc": l_itc.item(),
+      "itm": l_itm.item(),
+      "lm": l_lm.item()}
