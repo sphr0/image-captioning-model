@@ -360,3 +360,40 @@ class BLIPFromScratch(nn.Module):
     if was_training: # set back to the state it was
       self.train()
     return ids
+
+
+# ========================================================================
+# TRANSFER LEARNING MODEL
+# ========================================================================
+
+from transformers import BlipForConditionalGeneration, BlipProcessor
+
+CHECKPOINT = "Salesforce/blip-image-captioning-base"
+## defaults for comparing all 3 proposed models
+GEN_DEFAULTS = dict(num_beams=3, max_new_tokens=30, do_sample=False)
+
+def load_blip(device, dtype=torch.float16):
+  model = BlipForConditionalGeneration.from_pretrained(CHECKPOINT)
+  model = model.to(device, dtype=dtype).eval()
+  processor = BlipProcessor.from_pretrained(CHECKPOINT) # tokenizes inputs
+  return model, processor
+
+class BLIPCaptioner:
+  name = "blip-base"
+
+  def __init__(self, device=None, dtype=torch.float16):
+      self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+      self.dtype = dtype
+      self.model, self.processor = load_blip(self.device, dtype)
+
+  @torch.no_grad()
+  def caption(self, images, prompt=None, **gen_kwargs):
+      if not isinstance(images, (list, tuple)):
+          images = [images]
+      text = [prompt] * len(images) if prompt else None
+      inputs = self.processor(images=images, text=text, return_tensors="pt", padding=True)
+      inputs = {k: v.to(self.device) for k, v in inputs.items()}
+      inputs["pixel_values"] = inputs["pixel_values"].to(self.dtype)
+      out = self.model.generate(**inputs, **{**GEN_DEFAULTS, **gen_kwargs})
+      # <NOTE> with a prompt, the decoded string includes the prompt prefix
+      return [c.strip() for c in self.processor.batch_decode(out, skip_special_tokens=True)]
