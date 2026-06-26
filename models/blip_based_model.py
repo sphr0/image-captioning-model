@@ -354,7 +354,7 @@ class BLIPFromScratch(nn.Module):
         nxt = logits.argmax(-1)
       nxt = nxt.masked_fill(done, self.cfg.pad_token_id) # replace token with padding if seq aleady done
       ids = torch.cat([ids, nxt[:, None]], -1) # append generated tokens
-      done = |= nxt == self.cfg.eos_token_id # mark seq as done if it ended with [EOS]
+      done |= (nxt == self.cfg.eos_token_id) # mark seq as done if it ended with [EOS]
       if done.all():
         break
     if was_training: # set back to the state it was
