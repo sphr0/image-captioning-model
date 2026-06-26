@@ -370,7 +370,11 @@ from transformers import BlipForConditionalGeneration, BlipProcessor
 
 CHECKPOINT = "Salesforce/blip-image-captioning-base"
 ## defaults for comparing all 3 proposed models
-GEN_DEFAULTS = dict(num_beams=3, max_new_tokens=30, do_sample=False)
+GEN_DEFAULTS = dict(num_beams=3,
+                    max_new_tokens=30,
+                    do_sample=False,
+                    no_repeat_ngram_size=2,
+                    repetition_penalty=1.1)
 
 def load_blip(device, dtype=torch.float16):
   model = BlipForConditionalGeneration.from_pretrained(CHECKPOINT)
