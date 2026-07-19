@@ -185,7 +185,7 @@ class BertLayer(nn.Module):
     sa = self.sa_caus if mode == "multimodal_dec" else self.sa_bi
     x = self.norm_sa(x + sa(x, attn_mask=sa_mask))
     if mode in ("multimodal_dec", "multimodal_enc"):
-      x = self.norm_ca(x + self.cross(x, kv=img, attn_mask=img_mask)) # no ca needed for text
+      x = self.norm_ca(x + self.cross(x, kv=img, attn_mask=img_mask)) # ca only for multimodal modes (ITM/LM)
     return self.norm_ffn(x + self.ffn(x))
 
 
@@ -208,7 +208,7 @@ class TextTransformer(nn.Module):
 # SUB-MODULES INIT WEIGHTS
 
 def _init_bert_weights(m):
-  if isinstance(m, nn.Linear): # set linear weights to have mean=0 and std=0.02. bias also 0
+  if isinstance(m, nn.Linear): # set linear weights to have mean=0, std=0.02 and bias=0
     nn.init.normal_(m.weight, std=0.02)
     if m.bias is not None:
       nn.init.zeros_(m.bias)
@@ -217,7 +217,7 @@ def _init_bert_weights(m):
     if m.padding_idx is not None:
       with torch.no_grad():
         m.weight[m.padding_idx].zero_() # zero out [pad] embedding
-  elif isinstance(m, nn.LayerNorm): # y = (x-mean) / std*[w=1] + [b=0] -> y=normalized(x)
+  elif isinstance(m, nn.LayerNorm): # y = (x - mean) / std*[w=1] + [b=0] -> y=normalized(x)
     nn.init.zeros_(m.bias)
     nn.init.ones_(m.weight)
 

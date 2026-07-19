@@ -15,14 +15,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
 
-
 # ==================================================================
-# PART 1 - FROM-SCRATCH IMPLEMENTATION
+# FROM-SCRATCH IMPLEMENTATION
 # ==================================================================
 
-
-# ViT & GPT2 HYPERPARAMETERS
-
+# ViT & GPT2 CONFIG
 @dataclass
 class ViTConfig:
     image_size: int = 224
@@ -33,6 +30,7 @@ class ViTConfig:
     heads: int = 12
     mlp_ratio: float = 4.0
     drop: float = 0.0
+
 
 @dataclass
 class GPT2Config:
@@ -46,7 +44,8 @@ class GPT2Config:
 
 # MHA (modular design for encoder and decoder self-attn AND the decoder cross-attn )
 
-class MultiHeadAttention(nn.Module):
+# <FIXME> MHA class: Make sure it's the same as MHA in BLIP, Then replace
+class MHA(nn.Module):
     """Single module for self- and cross-attn. Can run on 8GB VRAM.
      causal=True -> decoder self-attn; pass x_kv for
     cross-attn. key_padding_mask: (B, Tk) bool, True = keep."""
@@ -61,6 +60,10 @@ class MultiHeadAttention(nn.Module):
         self.v = nn.Linear(dim, dim)
         self.proj = nn.Linear(dim, dim)
         self.drop = drop
+
+    def _split(self, x):
+        B, T, C = x.shape
+        return x.view(B, T, self.heads, self.head_dim).transpose
 
     def forward(self, x_q, x_kv=None, causal=False, key_padding_mask=None):
         x_kv = x_q if x_kv is None else x_kv
@@ -88,7 +91,6 @@ class MultiHeadAttention(nn.Module):
 
 
 # Standard MLP with GELU
-
 class MLP(nn.Module):
     def __init__(self, dim, mlp_ratio, drop=0.0):
         super().__init__()
@@ -102,14 +104,14 @@ class MLP(nn.Module):
 
 
 # ViT BLOCK
-
 class ViTBlock(nn.Module):
     """Pre-norm(for both MHA and MLP) encoder block."""
 
     def __init__(self, cfg: ViTConfig):
         super().__init__()
+        #<FIXME> norm1 and norm2 can be defined in one line
         self.norm1 = nn.LayerNorm(cfg.dim)
-        self.attn = MultiHeadAttention(cfg.dim, cfg.heads, cfg.drop)
+        self.attn = MHA(cfg.dim, cfg.heads, cfg.drop)
         self.norm2 = nn.LayerNorm(cfg.dim)
         self.mlp = MLP(cfg.dim, cfg.mlp_ratio, cfg.drop)
 
@@ -119,8 +121,10 @@ class ViTBlock(nn.Module):
         return x
 
 
-# ViT FULL MODEL
+#<FIXME> PatchEmbedding class: add a patch embedding class and replace
+# with VisionTransformer's patch_embed attr AND forward func.
 
+# ViT FULL MODEL
 class VisionTransformer(nn.Module):
     def __init__(self, cfg: ViTConfig):
         super().__init__()
@@ -171,9 +175,9 @@ class GPT2Block(nn.Module):
     def __init__(self, cfg: GPT2Config):
         super().__init__()
         self.ln1 = nn.LayerNorm(cfg.dim)
-        self.self_attn = MultiHeadAttention(cfg.dim, cfg.heads, cfg.drop)
+        self.self_attn = MHA(cfg.dim, cfg.heads, cfg.drop)
         self.ln_cross = nn.LayerNorm(cfg.dim)
-        self.cross_attn = MultiHeadAttention(cfg.dim, cfg.heads, cfg.drop)
+        self.cross_attn = MHA(cfg.dim, cfg.heads, cfg.drop)
         self.ln2 = nn.LayerNorm(cfg.dim)
         self.mlp = MLP(cfg.dim, cfg.mlp_ratio, cfg.drop)
 
@@ -272,7 +276,7 @@ class ViTGPT2FromScratch(nn.Module):
         return ids
 
 # ===========================================================================
-# PART 2 - HF MODEL
+# TRANSFER LEARNING MODEL
 # ===========================================================================
 
 from transformers import VisionEncoderDecoderModel, ViTImageProcessor, AutoTokenizer
