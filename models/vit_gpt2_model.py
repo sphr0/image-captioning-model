@@ -53,26 +53,32 @@ class MHA(nn.Module):
     def __init__(self, dim, heads, drop=0.0):
         super().__init__()
         assert dim % heads == 0
-        self.heads = heads
-        self.head_dim = dim // heads
+        self.heads, self.head_dim = heads, dim // heads # <NOTE> rename to h and d
         self.q = nn.Linear(dim, dim)
-        self.k = nn.Linear(dim, dim)
-        self.v = nn.Linear(dim, dim)
+        self.kv = nn.Linear(dim, dim * 2)
+        # self.k = nn.Linear(dim, dim)
+        # self.v = nn.Linear(dim, dim)
         self.proj = nn.Linear(dim, dim)
         self.drop = drop
 
     def _split(self, x):
         B, T, C = x.shape
-        return x.view(B, T, self.heads, self.head_dim).transpose
+        return x.view(B, T, self.heads, self.head_dim).transpose(1, 2)
 
     def forward(self, x_q, x_kv=None, causal=False, key_padding_mask=None):
         x_kv = x_q if x_kv is None else x_kv
         B, Tq, C = x_q.shape
         Tk = x_kv.shape[1]
-        q = self.q(x_q).view(B, Tq, self.heads, self.head_dim).transpose(1, 2)
-        k = self.k(x_kv).view(B, Tk, self.heads, self.head_dim).transpose(1, 2)
-        v = self.v(x_kv).view(B, Tk, self.heads, self.head_dim).transpose(1, 2)
+        q = self._split(self.q(x_q))
+        k, v = self.kv(x_kv).chunk(2, dim=-1)
+        k = self._split(k)
+        v = self._split(v)
         p = self.drop if self.training else 0.0
+        
+        # q = self.q(x_q).view(B, Tq, self.heads, self.head_dim).transpose(1, 2)
+        # k = self.k(x_kv).view(B, Tk, self.heads, self.head_dim).transpose(1, 2)
+        # v = self.v(x_kv).view(B, Tk, self.heads, self.head_dim).transpose(1, 2)
+        # p = self.drop if self.training else 0.0
 
         if key_padding_mask is None:
             out = F.scaled_dot_product_attention(q, k, v, is_causal=causal, dropout_p=p)
