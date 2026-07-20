@@ -50,10 +50,10 @@ class MHA(nn.Module):
      causal=True -> decoder self-attn; pass x_kv for
     cross-attn. key_padding_mask: (B, Tk) bool, True = keep."""
 
-    def __init__(self, dim, heads, drop=0.0):
+    def __init__(self, dim, h, drop=0.0):
         super().__init__()
-        assert dim % heads == 0
-        self.heads, self.head_dim = heads, dim // heads # <NOTE> rename to h and d
+        assert dim % h == 0
+        self.h, self.h_dim = h, dim // h
         self.q = nn.Linear(dim, dim)
         self.kv = nn.Linear(dim, dim * 2)
         # self.k = nn.Linear(dim, dim)
@@ -63,7 +63,7 @@ class MHA(nn.Module):
 
     def _split(self, x):
         B, T, C = x.shape
-        return x.view(B, T, self.heads, self.head_dim).transpose(1, 2)
+        return x.view(B, T, self.h, self.h_dim).transpose(1, 2)
 
     def forward(self, x_q, x_kv=None, causal=False, key_padding_mask=None):
         x_kv = x_q if x_kv is None else x_kv
@@ -74,20 +74,13 @@ class MHA(nn.Module):
         k = self._split(k)
         v = self._split(v)
         p = self.drop if self.training else 0.0
-        
-        # q = self.q(x_q).view(B, Tq, self.heads, self.head_dim).transpose(1, 2)
-        # k = self.k(x_kv).view(B, Tk, self.heads, self.head_dim).transpose(1, 2)
-        # v = self.v(x_kv).view(B, Tk, self.heads, self.head_dim).transpose(1, 2)
-        # p = self.drop if self.training else 0.0
 
         if key_padding_mask is None:
             out = F.scaled_dot_product_attention(q, k, v, is_causal=causal, dropout_p=p)
-        else:
-            # Combine padding (+ optional causal) into one additive mask; SDPA forbids
-            # is_causal together with an explicit attn_mask.
+        else: # create padding mask
             mask = torch.zeros(B, 1, Tq, Tk, device=q.device, dtype=q.dtype)
             mask.masked_fill_(~key_padding_mask[:, None, None, :], float("-inf"))
-            if causal:
+            if causal: # add causal mask to padding mask
                 cm = torch.triu(torch.ones(Tq, Tk, device=q.device, dtype=torch.bool), 1)
                 mask.masked_fill_(cm, float("-inf"))
             out = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=p)
@@ -116,9 +109,8 @@ class ViTBlock(nn.Module):
     def __init__(self, cfg: ViTConfig):
         super().__init__()
         #<FIXME> norm1 and norm2 can be defined in one line
-        self.norm1 = nn.LayerNorm(cfg.dim)
+        self.norm1, self.norm2 = nn.LayerNorm(cfg.dim), nn.LayerNorm(cfg.dim)
         self.attn = MHA(cfg.dim, cfg.heads, cfg.drop)
-        self.norm2 = nn.LayerNorm(cfg.dim)
         self.mlp = MLP(cfg.dim, cfg.mlp_ratio, cfg.drop)
 
     def forward(self, x):
