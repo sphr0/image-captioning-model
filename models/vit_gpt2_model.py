@@ -195,7 +195,7 @@ class GPT2Decoder(nn.Module):
         self.blocks = nn.ModuleList([GPT2Block(cfg) for _ in range(cfg.depth)])
         self.ln_f = nn.LayerNorm(cfg.dim)
         self.lm_head = nn.Linear(cfg.dim, cfg.vocab_size, bias=False)
-        self.lm_head.weight = self.wte.weight # weight tying the wte and lm head
+        # self.lm_head.weight = self.wte.weight
 
     def forward(self, input_ids, memory, mem_mask=None):
         T = input_ids.shape[1]
@@ -215,7 +215,7 @@ class ViTGPT2FromScratch(nn.Module):
         self.bridge = CrossAttentionBridge(vit_cfg.dim, gpt_cfg.dim)
         self.decoder = GPT2Decoder(gpt_cfg)
         self.apply(self._init)
-        self.decoder.lm_head.weight = self.decoder.wte.weight
+        self.decoder.lm_head.weight = self.decoder.wte.weight # weight tying the wte and lm head
  
 
     # if linear layer, fill weight with random num AND set bias to 0
