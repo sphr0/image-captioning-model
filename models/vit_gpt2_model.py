@@ -246,7 +246,7 @@ class ViTGPT2FromScratch(nn.Module):
     @torch.no_grad()
     def generate(self, pixel_values, bos_id, eos_id, max_len=30,
                  temperature=1.0, top_k=None):
-        """Un-cached decode (O(T^2) — fine for caption lengths). Memory is encoded once."""
+        """Un-cached decode (O(T^2) which is fine for caption lengths). Memory is encoded once."""
         self.eval()
         memory = self.bridge(self.encoder(pixel_values)) # img -> enc -> bridge
         B = pixel_values.size(0) # no. of imgs in batch
