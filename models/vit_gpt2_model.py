@@ -42,9 +42,10 @@ class GPT2Config:
     mlp_ratio: float = 4.0
     drop: float = 0.1
 
-# MHA (modular design for encoder and decoder self-attn AND the decoder cross-attn )
 
-# <FIXME> MHA class: Make sure it's the same as MHA in BLIP, Then replace
+# =================================
+# SHARED MODULES
+
 class MHA(nn.Module):
     """Single module for self- and cross-attn. Can run on 8GB VRAM.
      causal=True -> decoder self-attn; pass x_kv for
@@ -102,13 +103,14 @@ class MLP(nn.Module):
         return self.drop(self.fc2(self.drop(F.gelu(self.fc1(x)))))
 
 
-# ViT BLOCK
+# =======================================
+# VIT
+
 class ViTBlock(nn.Module):
     """Pre-norm(for both MHA and MLP) encoder block."""
 
     def __init__(self, cfg: ViTConfig):
         super().__init__()
-        #<FIXME> norm1 and norm2 can be defined in one line
         self.norm1, self.norm2 = nn.LayerNorm(cfg.dim), nn.LayerNorm(cfg.dim)
         self.attn = MHA(cfg.dim, cfg.heads, cfg.drop)
         self.mlp = MLP(cfg.dim, cfg.mlp_ratio, cfg.drop)
@@ -118,9 +120,6 @@ class ViTBlock(nn.Module):
         x = x + self.mlp(self.norm2(x))
         return x
 
-
-#<FIXME> PatchEmbedding class: add a patch embedding class and replace
-# with VisionTransformer's patch_embed attr AND forward func.
 
 # ViT FULL MODEL
 class VisionTransformer(nn.Module):
@@ -147,12 +146,12 @@ class VisionTransformer(nn.Module):
         return self.norm(x) # (B, 197, dim) — full seq is the cross-attn memory
 
 
-# CROSS-ATTN BRIDGE
 # ==================================
+# CROSS-ATTN BRIDGE
 
 class CrossAttentionBridge(nn.Module):
-    """Projects encoder hidden states into the decoder's cross-attn KV space. Dim:
-    768->768. the thing that must be trained when both towers are frozen, rather than a dimensionality fix."""
+    """Projects encoder hidden states into the decoder's cross-attn KV space. Dim:768->768.
+    the thing that must be trained when both towers are frozen, rather than a dimensionality fix."""
 
     def __init__(self, enc_dim, dec_dim):
         super().__init__()
@@ -163,8 +162,8 @@ class CrossAttentionBridge(nn.Module):
         return self.norm(self.proj(enc))
 
 
-# GPT-2 DECODER
 # ===================================
+# GPT-2 DECODER
 
 class GPT2Block(nn.Module):
     """GPT-2 block with cross-attn inserted between masked self-attn and MLP.
@@ -190,13 +189,13 @@ class GPT2Decoder(nn.Module):
     def __init__(self, cfg: GPT2Config):
         super().__init__()
         self.cfg = cfg
-        self.wte = nn.Embedding(cfg.vocab_size, cfg.dim)
-        self.wpe = nn.Embedding(cfg.n_positions, cfg.dim)
+        self.wte = nn.Embedding(cfg.vocab_size, cfg.dim) # word token embedding (table)
+        self.wpe = nn.Embedding(cfg.n_positions, cfg.dim) # word position embedding (table)
         self.drop = nn.Dropout(cfg.drop)
         self.blocks = nn.ModuleList([GPT2Block(cfg) for _ in range(cfg.depth)])
         self.ln_f = nn.LayerNorm(cfg.dim)
         self.lm_head = nn.Linear(cfg.dim, cfg.vocab_size, bias=False)
-        self.lm_head.weight = self.wte.weight # weight tying
+        self.lm_head.weight = self.wte.weight # weight tying the wte and lm head
 
     def forward(self, input_ids, memory, mem_mask=None):
         T = input_ids.shape[1]
@@ -207,8 +206,6 @@ class GPT2Decoder(nn.Module):
         return self.lm_head(self.ln_f(x)) # (B, T, vocab)
 
 
-# ===================================
-
 class ViTGPT2FromScratch(nn.Module):
 
     # build the 3 main pieces and run _init on every layer
@@ -218,10 +215,11 @@ class ViTGPT2FromScratch(nn.Module):
         self.bridge = CrossAttentionBridge(vit_cfg.dim, gpt_cfg.dim)
         self.decoder = GPT2Decoder(gpt_cfg)
         self.apply(self._init)
+        self.decoder.lm_head.weight = self.decoder.wte.weight
  
 
     # if linear layer, fill weight with random num AND set bias to 0
-    # if lookup table (Embedding), fill with random num
+    # if lookup table (Embedding), fill with random num std=0.02 for both
     @staticmethod
     def _init(m):
         if isinstance(m, nn.Linear):
