@@ -37,7 +37,7 @@ class VisionConfig:
 @dataclass
 class GITConfig:
     vocab_size: int = 30_522
-    max_text_length: int = 1_024
+    max_text_length: int = 1024
     hidden_size: int = 768
     num_layers: int = 6
     num_heads: int = 12
@@ -49,11 +49,28 @@ class GITConfig:
 
     vision: VisionConfig = field(default_factory=VisionConfig)
 
+# ===============================
+# PRIVATE FUNCTIONS
+
+# Mask function
+def _attn_mask(i_len, t_len, device=None):
+    """
+    returns GIT attention mask
+        i_len: image sequence length
+        t_len: text sequence length
+    """
+    dim = i_len + t_len
+    print('dim ', dim)
+    img_key_mask = torch.ones((dim, i_len), dtype=torch.bool, device=device)
+    txt_key_mask = torch.ones(dim, t_len, dtype=torch.bool, device=device).tril_(diagonal=-i_len)
+    mask = torch.concat([img_key_mask, txt_key_mask], dim=1)
+    print(mask)
+    return mask
+
 # ==================================================
 # VISUAL ENCODER (CLIP ViT-B/16)
 # ==================================================
 
-# <NOTE> 1. MHA + test
 # <NOTE> 2. projection and embedding modules
 # <NOTE> 4. vision tower
 
