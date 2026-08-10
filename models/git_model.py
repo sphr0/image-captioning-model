@@ -6,9 +6,8 @@ architecture:
 
 The encoder seen in the paper's GIT model (Florence/CoSwin) is not 
 publically available but the GIT-base model uses a CLIP ViT-B/16, which
-has differences: layerNorm right after patch+position embedding, QuickGELU
-instead of GELU in MLP, and inside ViT block it uses postnorm instead
-of pre-norm.
+has differences: layerNorm right after patch+position embedding and a 
+postnorm at the end, and QuickGELU instead of GELU in MLP.
 The decoder is a BERT-like transformer with weights randomly initiallized. 
 In addition it uses a prefix-causal mask with LM training objective.
 
@@ -16,7 +15,6 @@ In the Transfered models, we have both Git-B and Git-L since Git-L could
 fit in even with hardware limitations.
 """
 
-from huggingface_hub.utils._http import default_client_factory
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -84,22 +82,22 @@ def _attn_mask(img_len, txt_pad_mask):
     return mask[:, None, :, :]
 
 
-# _attn_mask(3, torch.tensor([[1,1,1,0,0], [1,1,1,1,1], [1,0,0,0,0], [1,1,0,0,0]], dtype=torch.int8))
-
 # ==================================================
 # VISUAL ENCODER (CLIP ViT-B/16)
 # ==================================================
 
-# <NOTE> 2. projection and embedding modules
-# <NOTE> 4. vision tower
+# <NOTE> 2. Vision Encoder
+# <NOTE> 3. Projection
 
 # ==================================================
 # Text Decoder (Bert-like)
 # ==================================================
 
-# <NOTE> 3. decoder block
-
+# <NOTE> 4. Text Embeddings
+# <NOTE> 5. Decoder Blocks
+# <NOTE> 6. LM head + loss
 # why is tie_word_embeddings equal to False?
+# <NOTE> 6. Generate func
 
 # <NOTE> 5. assemble forward
 # <NOTE> 6. greedy generate
