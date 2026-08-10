@@ -53,19 +53,38 @@ class GITConfig:
 # PRIVATE FUNCTIONS
 
 # Mask function
-def _attn_mask(i_len, t_len, device=None):
+def _attn_mask(img_len, txt_pad_mask):
     """
-    returns GIT attention mask
-        i_len: image sequence length
-        t_len: text sequence length
+    creates GIT attention mask
+
+    Args:
+        img_len: number of image-prefix tokens
+        txt_pad_mask: padding mask for each 
+            sample in the batch (T=true token).
+    
+    Returns: Bool mask of shape [B, 1, L, L] (T=can attend)
     """
-    dim = i_len + t_len
-    print('dim ', dim)
-    img_key_mask = torch.ones((dim, i_len), dtype=torch.bool, device=device)
-    txt_key_mask = torch.ones(dim, t_len, dtype=torch.bool, device=device).tril_(diagonal=-i_len)
-    mask = torch.concat([img_key_mask, txt_key_mask], dim=1)
-    print(mask)
-    return mask
+
+    device = txt_pad_mask.device
+    batch_size, txt_len = txt_pad_mask.shape # txt_len includes padding part too
+    total_seq_len = img_len + txt_len
+
+    # all queries can attend to img
+    img_key_mask = torch.ones((total_seq_len, img_len), dtype=torch.bool, device=device)
+    # img -> txt = False, txt -> txt = Causal
+    txt_key_mask = torch.ones(total_seq_len, txt_len, dtype=torch.bool, device=device).tril_(diagonal=-img_len)
+    structural_mask = torch.cat([img_key_mask, txt_key_mask], dim=1) # [L, L]
+
+    # All img token positions are valid
+    img_valid = torch.ones((batch_size, img_len), dtype=torch.bool, device=device)
+    # valid img tokens + valid txt tokens in the batch
+    key_valid = torch.cat([img_valid, txt_pad_mask.bool()], dim=1) # [B, L]
+
+    mask = (structural_mask[None, :, :] & key_valid[:, None, :])
+    return mask[:, None, :, :]
+
+
+# _attn_mask(3, torch.tensor([[1,1,1,0,0], [1,1,1,1,1], [1,0,0,0,0], [1,1,0,0,0]], dtype=torch.int8))
 
 # ==================================================
 # VISUAL ENCODER (CLIP ViT-B/16)
