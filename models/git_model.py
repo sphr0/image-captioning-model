@@ -15,6 +15,7 @@ In the Transfered models, we have both Git-B and Git-L since Git-L could
 fit in even with hardware limitations.
 """
 
+from torch.export import Dim
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -86,7 +87,44 @@ def _attn_mask(img_len, txt_pad_mask):
 # VISUAL ENCODER (CLIP ViT-B/16)
 # ==================================================
 
-# <NOTE> 2. Vision Encoder
+class MHA(nn.Module):
+    """
+    GIT-specific MHA, only does self-attention (no causal)
+    since _attn_mask handles that.
+    """
+
+    def __init__(self, dim, h, drop=0.0):
+        super().__init__()
+        assert dim % h == 0
+
+        self.h, self.h_dim = h, dim // h
+        self.q = nn.Linear(dim, dim)
+        self.kv = nn.Linear(dim, dim * 2)
+        self.proj = nn.Linear(dim, dim)
+        self.drop = drop
+
+    def _split(self, x):
+        B, T, C = x.shape # number of batch, seq length and channels 
+        return x.view(B, T, self.h, self.h_dim).transpose(1, 2) # [B, H, T, h_dim]
+    
+    def forward(self, x, attn_mask=None):
+        B, T, C = x.shape
+
+        q = self._split(self.q(x))
+        k, v = self.kv(x).chunk(2, dim=-1) # last dim is channels. split to k and v.
+        k = self._split(k)
+        v = self._split(v)
+        p = self.drop if self.training else 0.0
+
+        out = F.scaled_dot_product_attention(query=q, 
+        key=k, 
+        value=v, 
+        attn_mask=attn_mask, 
+        dropout_p=p) # [B, h, T, h_dim]
+
+        out = out.transpose(1, 2).reshape(B, T, C) # concating attn heads back into one
+        return self.proj(out) # return projection of the heads
+
 # <NOTE> 3. Projection
 
 # ==================================================
@@ -96,9 +134,5 @@ def _attn_mask(img_len, txt_pad_mask):
 # <NOTE> 4. Text Embeddings
 # <NOTE> 5. Decoder Blocks
 # <NOTE> 6. LM head + loss
-# why is tie_word_embeddings equal to False?
 # <NOTE> 6. Generate func
-
-# <NOTE> 5. assemble forward
-# <NOTE> 6. greedy generate
-# <NOTE> 7. smoke test
+# why is tie_word_embeddings equal to False?
