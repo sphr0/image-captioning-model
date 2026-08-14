@@ -83,6 +83,9 @@ def _attn_mask(img_len, txt_pad_mask):
     return mask[:, None, :, :]
 
 
+    def _quick_gelu(x):
+        return x * torch.sigmoid(1.702 * x) # 
+
 # ==================================================
 # VISUAL ENCODER (CLIP ViT-B/16)
 # ==================================================
