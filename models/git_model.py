@@ -15,7 +15,7 @@ In the Transfered models, we have both Git-B and Git-L since Git-L could
 fit in even with hardware limitations.
 """
 
-from torch.export import Dim
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -101,6 +101,7 @@ class MHA(nn.Module):
         self.q = nn.Linear(dim, dim)
         self.kv = nn.Linear(dim, dim * 2)
         self.proj = nn.Linear(dim, dim)
+        self.ln = nn.LayerNorm(dim)
         self.drop = drop
 
     def _split(self, x):
@@ -123,7 +124,21 @@ class MHA(nn.Module):
         dropout_p=p) # [B, h, T, h_dim]
 
         out = out.transpose(1, 2).reshape(B, T, C) # concating attn heads back into one
-        return self.proj(out) # return projection of the heads
+        return self.ln(self.proj(out)) # return projection of the heads post-normed
+
+
+class MLP(nn.Module):
+    def __init__(self, dim, ratio, act=F.gelu):
+        super().__init__()
+
+        self.dense_in = nn.Linear(dim, dim * ratio)
+        self.dense_out = nn.Linear(dim * ratio, dim)
+        self.act = act
+        self.ln = nn.LayerNorm(dim) # post-norm
+
+    def forward(self, x):
+        h = self.act(self.dense_in(x))
+        return self.ln(self.dense_out(h) + x) # residual
 
 # <NOTE> 3. Projection
 
