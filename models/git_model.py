@@ -51,6 +51,7 @@ class GITConfig:
 # ===============================
 # PRIVATE FUNCTIONS
 
+# <NOTE> add dropout but set to zero
 # Mask function
 def _attn_mask(img_len, txt_pad_mask):
     """
@@ -83,8 +84,8 @@ def _attn_mask(img_len, txt_pad_mask):
     return mask[:, None, :, :]
 
 
-    def _quick_gelu(x):
-        return x * torch.sigmoid(1.702 * x) # 
+def _quick_gelu(x):
+    return x * torch.sigmoid(1.702 * x) # 
 
 # ==================================================
 # VISUAL ENCODER (CLIP ViT-B/16)
@@ -104,7 +105,6 @@ class MHA(nn.Module):
         self.q = nn.Linear(dim, dim)
         self.kv = nn.Linear(dim, dim * 2)
         self.proj = nn.Linear(dim, dim)
-        self.ln = nn.LayerNorm(dim)
         self.drop = drop
 
     def _split(self, x):
@@ -127,21 +127,34 @@ class MHA(nn.Module):
         dropout_p=p) # [B, h, T, h_dim]
 
         out = out.transpose(1, 2).reshape(B, T, C) # concating attn heads back into one
-        return self.ln(self.proj(out)) # return projection of the heads post-normed
+        return self.proj(out) # return projection of the heads
 
 
 class MLP(nn.Module):
-    def __init__(self, dim, ratio, act=F.gelu):
+    def __init__(self, dim, ratio, act=F.gelu, drop=0.0):
         super().__init__()
 
         self.dense_in = nn.Linear(dim, dim * ratio)
         self.dense_out = nn.Linear(dim * ratio, dim)
         self.act = act
-        self.ln = nn.LayerNorm(dim) # post-norm
+        self.dropout = nn.Dropout(drop)
 
     def forward(self, x):
         h = self.act(self.dense_in(x))
-        return self.ln(self.dense_out(h) + x) # residual
+        return self.dropout(self.dense_out(h)) # residual and post-norm NOT internalized
+
+
+class ViTBlock(nn.Module):
+    def __init__(self, cfg: VisionConfig):
+        super().__init__()
+
+        self.ln1, self.ln2 = nn.LayerNorm(cfg.hidden_size, eps=1e-5), nn.LayerNorm(cfg.hidden_size, eps=1e-5)
+        self.attn = MHA(dim=cfg.hidden_size, h=cfg.num_heads, drop=0.0)
+        self.mlp = MLP(dim=cfg.hidden_size, ratio=cfg.mlp_ratio, act=_quick_gelu, drop=0.0)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln1(x))
+        return x + self.mlp(self.ln2(x))
 
 # <NOTE> 3. Projection
 
