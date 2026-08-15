@@ -145,6 +145,7 @@ class MLP(nn.Module):
         return self.dropout(self.dense_out(h)) # residual and post-norm NOT internalized
 
 
+# <NOTE> Not sure if the cfg passes to this correctly. Must check later
 class ViTBlock(nn.Module):
     def __init__(self, cfg: VisionConfig):
         super().__init__()
@@ -167,7 +168,22 @@ class PatchProjection(nn.Module):
         return self.proj(x)
 
 
-# <NOTE> 3. Projection
+class VisionTransformer(nn.Module):
+    def __init__(self, cfg: GITConfig):
+        super().__init__()
+        assert cfg.vision.image_size % cfg.vision.patch_size == 0
+        num_patches = (cfg.vision.image_size // cfg.vision.patch_size) ** 2
+
+        self.patch_embedding = PatchProjection(cfg.vision.num_channels, 
+                                               cfg.vision.hidden_size, 
+                                               cfg.vision.patch_size)
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, cfg.vision.hidden_size))
+        self.pos_embedding = nn.Parameter(torch.zeros(1, num_patches + 1, cfg.vision.hidden_size))
+        self.pre_ln = nn.LayerNorm(cfg.vision.hidden_size, eps=1e-5)
+        self.blocks = nn.ModuleList([ViTBlock(cfg) for _ in range(cfg.vision.num_layers)])
+        self.post_ln = nn.LayerNorm(cfg.vision.hidden_size, eps=1e-5)
+
+
 
 # ==================================================
 # Text Decoder (Bert-like)
