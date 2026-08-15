@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 class VisionConfig:
     image_size: int = 224
     patch_size: int = 16
+    num_channels: int = 3
 
     hidden_size: int = 768
     num_layers: int = 12
@@ -85,7 +86,7 @@ def _attn_mask(img_len, txt_pad_mask):
 
 
 def _quick_gelu(x):
-    return x * torch.sigmoid(1.702 * x) # 
+    return x * torch.sigmoid(1.702 * x)
 
 # ==================================================
 # VISUAL ENCODER (CLIP ViT-B/16)
@@ -155,6 +156,16 @@ class ViTBlock(nn.Module):
     def forward(self, x):
         x = x + self.attn(self.ln1(x))
         return x + self.mlp(self.ln2(x))
+
+class PatchProjection(nn.Module):
+    def __init__(self, num_channels, hidden_dim, patch_size):
+        super().__init__()
+
+        self.proj = nn.Conv2d(in_channels=num_channels, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size)
+    
+    def forward(self, x):
+        return self.proj(x)
+
 
 # <NOTE> 3. Projection
 
