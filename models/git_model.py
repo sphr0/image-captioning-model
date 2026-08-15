@@ -31,7 +31,7 @@ class VisionConfig:
     num_layers: int = 12
     num_heads: int = 12
 
-    mlp_ratio: float = 4.0
+    mlp_ratio: int = 4
 
 
 @dataclass
@@ -162,7 +162,11 @@ class PatchProjection(nn.Module):
     def __init__(self, num_channels, hidden_dim, patch_size):
         super().__init__()
 
-        self.proj = nn.Conv2d(in_channels=num_channels, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv2d(in_channels=num_channels, 
+                              out_channels=hidden_dim, 
+                              kernel_size=patch_size, 
+                              stride=patch_size,
+                              bias=False)
     
     def forward(self, x):
         return self.proj(x)
@@ -180,7 +184,7 @@ class VisionTransformer(nn.Module):
         self.cls_token = nn.Parameter(torch.zeros(1, 1, cfg.vision.hidden_size))
         self.pos_embedding = nn.Parameter(torch.zeros(1, num_patches + 1, cfg.vision.hidden_size))
         self.pre_ln = nn.LayerNorm(cfg.vision.hidden_size, eps=1e-5)
-        self.blocks = nn.ModuleList([ViTBlock(cfg) for _ in range(cfg.vision.num_layers)])
+        self.blocks = nn.ModuleList([ViTBlock(cfg.vision) for _ in range(cfg.vision.num_layers)])
         self.post_ln = nn.LayerNorm(cfg.vision.hidden_size, eps=1e-5)
 
 
