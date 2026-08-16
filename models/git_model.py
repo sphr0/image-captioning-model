@@ -187,6 +187,16 @@ class VisionTransformer(nn.Module):
         self.blocks = nn.ModuleList([ViTBlock(cfg.vision) for _ in range(cfg.vision.num_layers)])
         self.post_ln = nn.LayerNorm(cfg.vision.hidden_size, eps=1e-5)
 
+    def forward(self, x): # [B, num_channels, img_size, img_size]
+        B = x.shape[0]
+
+        x = self.patch_embedding(x).flatten(2).transpose(1, 2)
+        x = torch.cat([self.cls_token.expand(B, -1, -1), x], dim=1) + self.pos_embedding
+        x = self.pre_ln(x)
+        for blk in self.blocks:
+            x = blk(x)
+        return self.post_ln(x)
+
 
 
 # ==================================================
