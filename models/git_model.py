@@ -41,7 +41,7 @@ class GITConfig:
     hidden_size: int = 768
     num_layers: int = 6
     num_heads: int = 12
-    mlp_ratio: float = 4.0
+    mlp_ratio: int = 4
 
     pad_token_id: int = 0
     bos_token_id: int = 101
@@ -222,7 +222,26 @@ class GITEmbeddings(nn.Module):
         return self.drop(self.ln(x))
 
 
-# <NOTE> 5. Decoder Blocks
+class GITLayer(nn.Module):
+    def __init__(self, hidden_dim, num_heads, mlp_ratio, drop_p=0.0):
+        super().__init__()
+
+        self.attention = MHA(hidden_dim, num_heads)
+        self.attn_drop = nn.Dropout(drop_p)
+        self.post_ln1 = nn.LayerNorm(hidden_dim, eps=1e-12)
+        self.ffn = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim * mlp_ratio),
+            nn.GELU(),
+            nn.Linear(hidden_dim * mlp_ratio, hidden_dim),
+            nn.Dropout(drop_p)
+        )
+        self.post_ln2 = nn.LayerNorm(hidden_dim, eps=1e-12)
+
+    def forward(self, x, attn_mask):
+        x = self.post_ln1(self.attn_drop(self.attention(x, attn_mask)) + x)
+        return self.post_ln2(self.ffn(x) + x)
+
+
 # <NOTE> 6. LM head + loss
 # <NOTE> 6. Generate func
 # why is tie_word_embeddings equal to False?
