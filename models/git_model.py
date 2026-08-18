@@ -223,23 +223,34 @@ class GITEmbeddings(nn.Module):
 
 
 class GITLayer(nn.Module):
-    def __init__(self, hidden_dim, num_heads, mlp_ratio, drop_p=0.0):
+    def __init__(self, cfg: GITConfig):
         super().__init__()
 
-        self.attention = MHA(hidden_dim, num_heads)
-        self.attn_drop = nn.Dropout(drop_p)
-        self.post_ln1 = nn.LayerNorm(hidden_dim, eps=1e-12)
+        self.attention = MHA(cfg.hidden_size, cfg.num_heads)
+        self.attn_drop = nn.Dropout(0.0) # since we won't train it, hardcoded to 0.0
+        self.post_ln1 = nn.LayerNorm(cfg.hidden_size, eps=1e-12)
         self.ffn = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim * mlp_ratio),
+            nn.Linear(cfg.hidden_size, cfg.hidden_size * cfg.mlp_ratio),
             nn.GELU(),
-            nn.Linear(hidden_dim * mlp_ratio, hidden_dim),
-            nn.Dropout(drop_p)
+            nn.Linear(cfg.hidden_size * cfg.mlp_ratio, cfg.hidden_size),
+            nn.Dropout(0.0)
         )
-        self.post_ln2 = nn.LayerNorm(hidden_dim, eps=1e-12)
+        self.post_ln2 = nn.LayerNorm(cfg.hidden_size, eps=1e-12)
 
     def forward(self, x, attn_mask):
         x = self.post_ln1(self.attn_drop(self.attention(x, attn_mask)) + x)
         return self.post_ln2(self.ffn(x) + x)
+
+class GITEncoder(nn.Module):
+    def __init__(self, cfg: GITConfig):
+        super().__init__()
+
+        self.blocks = nn.ModuleList([GITLayer(cfg) for _ in range(cfg.num_layers)])
+
+    def forward(self, x, attn_mask):
+        for blk in self.blocks:
+            x = blk(x, attn_mask)
+        return x
 
 
 # <NOTE> 6. LM head + loss
