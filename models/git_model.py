@@ -209,15 +209,16 @@ class GITEmbeddings(nn.Module):
 
         self.word_embed = nn.Embedding(vocab_size, hidden_dim, pad_id)
         self.pos_embed = nn.Embedding(max_len, hidden_dim)
-        self.pos_ids = nn.Buffer(
-            torch.arange(max_len).expand((1, -1)),
+        self.pos_ids = self.register_buffer(
+            "pos_ids", 
+            torch.arange(max_len).unsqueeze(0), 
             persistent=False
         )
         self.ln = nn.LayerNorm(hidden_dim, eps= 1e-12)
         self.drop = nn.Dropout(drop_p)
 
     def forward(self, ids):
-        seq_len = ids.shape(1)
+        seq_len = ids.shape[1]
         x = self.word_embed(ids) + self.pos_embed(self.pos_ids[:, :seq_len])
         return self.drop(self.ln(x))
 
