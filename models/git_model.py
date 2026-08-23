@@ -254,6 +254,17 @@ class GITEncoder(nn.Module):
         return x
 
 
+# specifically uselful when the vision hidden dim doesn't match the text hidden dim.
+class GITProjection(nn.Module):
+    def __init__(self, vision_dim, txt_dim):
+        super().__init__()
+
+        self.linear = nn.Linear(vision_dim, txt_dim)
+        self.ln = nn.LayerNorm(txt_dim, eps=1e-05)
+
+    def forward(self, x):
+        return self.ln(self.linear(x))
+
 # <NOTE> 6. LM head + loss
 # <NOTE> 6. Generate func
 # why is tie_word_embeddings equal to False?
