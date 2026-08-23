@@ -265,6 +265,30 @@ class GITProjection(nn.Module):
     def forward(self, x):
         return self.ln(self.linear(x))
 
-# <NOTE> 6. LM head + loss
+
+class GITFromScratch(nn.Module):
+    def __init__(self, cfg: GITConfig):
+        super().__init_()
+
+        self.txt_embed = GITEmbeddings(cfg)
+        self.vision = VisionTransformer(cfg.vision)
+        self.git_encoder = GITEncoder(cfg)
+        self.proj = GITProjection(cfg.vision.hidden_size)
+        self.lm_head = nn.Linear(cfg.hidden_size, cfg.vocab_size)
+
+    def forward(self, pixel_values, ids, pad_mask=None):
+        if pad_mask is None:
+            pad_mask = torch.ones_like(ids, dtype=torch.bool)
+
+        vision_tokens = self.proj(self.vision(pixel_values))
+        txt_tokens = self.txt_embed(ids)
+        git_tokens = torch.cat((vision_tokens, txt_tokens), dim=1)
+        mask = _attn_mask(vision_tokens.shape[1], pad_mask)
+        git_embed = self.git_encoder(git_tokens, mask)
+        return self.lm_head(git_embed)
+
+
+
 # <NOTE> 6. Generate func
+# <NOTE> change VisionTransformer cfg -> cfg.vision in next commit
 # why is tie_word_embeddings equal to False?
