@@ -276,19 +276,33 @@ class GITFromScratch(nn.Module):
         self.proj = GITProjection(cfg.vision.hidden_size)
         self.lm_head = nn.Linear(cfg.hidden_size, cfg.vocab_size)
 
-    def forward(self, pixel_values, ids, pad_mask=None):
+    def forward(self, pixel_values, ids, pad_mask=None, labels=None):
         if pad_mask is None:
             pad_mask = torch.ones_like(ids, dtype=torch.bool)
 
         vision_tokens = self.proj(self.vision(pixel_values))
         txt_tokens = self.txt_embed(ids)
-        git_tokens = torch.cat((vision_tokens, txt_tokens), dim=1)
-        mask = _attn_mask(vision_tokens.shape[1], pad_mask)
-        git_embed = self.git_encoder(git_tokens, mask)
-        return self.lm_head(git_embed)
+        x = torch.cat((vision_tokens, txt_tokens), dim=1)
+
+        img_len = vision_tokens.shape[1]
+        mask = _attn_mask(img_len, pad_mask)
+        hidden = self.git_encoder(x, mask)
+        
+        # drop the img prefix before the vocab proj
+        txt_hidden = hidden[:, img_len:]
+        logits = self.lm_head(txt_hidden)
+
+        if labels is None:
+            return logits
+
+        loss = F.cross_entropy(
+            logits[:, :-1].reshape(-1, logits.size(-1)),
+            labels[:, 1:].reshape(-1),
+            ignore_index=self.cfg.pad_token_id
+        )
+        return loss, logits
 
 
 
-# <NOTE> 6. Generate func
 # <NOTE> change VisionTransformer cfg -> cfg.vision in next commit
 # why is tie_word_embeddings equal to False?
