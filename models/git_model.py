@@ -269,6 +269,7 @@ class GITProjection(nn.Module):
 class GITFromScratch(nn.Module):
     def __init__(self, cfg: GITConfig):
         super().__init_()
+        self.cfg = cfg
 
         self.vision = VisionTransformer(cfg.vision)
         self.proj = GITProjection(cfg.vision.hidden_size, cfg.hidden_size)
@@ -302,6 +303,34 @@ class GITFromScratch(nn.Module):
         )
         return loss, logits
 
+    @torch.inference_mode()
+    def generate(self, pixel_values, max_new_tokens=20):
+        bos_id = self.cfg.bos_token_id
+        B = pixel_values.shape[0]
+        ids = torch.full((B, 1), bos_id, dtype=torch.long, device=pixel_values.device)
+        # 1. seed the sequence with BOS, one per batch item -> ids [B, 1]
+        is_done = torch.zeros(B, dtype=torch.bool, device=pixel_values.device)
+        # 2. loop up to max_new_tokens:
+        for _ in range(max_new_tokens):
+            # <NOTE> We ignore the two-output scenario for forward since we don't train
+            # but implement something to handle that later...
+            logits = self(pixel_values, ids) # -> logits [B, cur_len, V]
+            # take the last position -> [B, V]
+            next_logits = logits[:, -1, :]
+            # pick a token id -> [B]
+            next_token = torch.argmax(next_logits, 1)
+            # replace with padding if seq has ended already
+            next_token = torch.where(is_done, self.cfg.pad_token_id, next_token)
+            # append to ids -> [B, cur_len+1]
+            ids = torch.cat((ids, next_token[:, None]), dim=1)
+            # stop if every sequence has emitted EOS
+                # switch is_done to True on any batch that ends with EOS
+            is_done |= (next_token == self.cfg.eos_token_id)
+                # if all is_done, break out of loop
+            if is_done.all():
+                break
+        # 3. return ids
+        return ids
 
 
 # <NOTE> change VisionTransformer cfg -> cfg.vision in next commit
