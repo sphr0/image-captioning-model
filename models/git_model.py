@@ -270,14 +270,14 @@ class GITFromScratch(nn.Module):
     def __init__(self, cfg: GITConfig):
         super().__init_()
 
-        self.txt_embed = GITEmbeddings(cfg)
         self.vision = VisionTransformer(cfg.vision)
+        self.proj = GITProjection(cfg.vision.hidden_size, cfg.hidden_size)
+        self.txt_embed = GITEmbeddings(cfg)
         self.git_encoder = GITEncoder(cfg)
-        self.proj = GITProjection(cfg.vision.hidden_size)
         self.lm_head = nn.Linear(cfg.hidden_size, cfg.vocab_size)
 
     def forward(self, pixel_values, ids, pad_mask=None, labels=None):
-        if pad_mask is None:
+        if pad_mask is None: # if no padding given, make all True mask
             pad_mask = torch.ones_like(ids, dtype=torch.bool)
 
         vision_tokens = self.proj(self.vision(pixel_values))
@@ -286,18 +286,18 @@ class GITFromScratch(nn.Module):
 
         img_len = vision_tokens.shape[1]
         mask = _attn_mask(img_len, pad_mask)
-        hidden = self.git_encoder(x, mask)
+        hidden = self.git_encoder(x, mask) # prefix gets self-attended [B, seq_len, hid_size]
         
-        # drop the img prefix before the vocab proj
+        # drop the img prefix before the vocab proj since not needed for the task
         txt_hidden = hidden[:, img_len:]
-        logits = self.lm_head(txt_hidden)
+        logits = self.lm_head(txt_hidden) # [B, text_seq_len, vocab_size]
 
-        if labels is None:
+        if labels is None: # if not training
             return logits
 
         loss = F.cross_entropy(
-            logits[:, :-1].reshape(-1, logits.size(-1)),
-            labels[:, 1:].reshape(-1),
+            logits[:, :-1].reshape(-1, logits.size(-1)), # flatten all predicted token positions
+            labels[:, 1:].reshape(-1), # same with all labels
             ignore_index=self.cfg.pad_token_id
         )
         return loss, logits
