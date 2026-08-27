@@ -209,7 +209,7 @@ class GITEmbeddings(nn.Module):
 
         self.word_embed = nn.Embedding(vocab_size, hidden_dim, pad_id)
         self.pos_embed = nn.Embedding(max_len, hidden_dim)
-        self.pos_ids = self.register_buffer(
+        self.register_buffer(
             "pos_ids", 
             torch.arange(max_len).unsqueeze(0), 
             persistent=False
