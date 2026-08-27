@@ -307,6 +307,8 @@ class GITFromScratch(nn.Module):
     def generate(self, pixel_values, max_new_tokens=20):
         bos_id = self.cfg.bos_token_id
         B = pixel_values.shape[0]
+        # decrease by 1 for the BOS token, which is accounted for with max_new_tokens arg
+        max_new_tokens = min(max_new_tokens, self.cfg.max_text_length - 1)
         ids = torch.full((B, 1), bos_id, dtype=torch.long, device=pixel_values.device)
         # 1. seed the sequence with BOS, one per batch item -> ids [B, 1]
         is_done = torch.zeros(B, dtype=torch.bool, device=pixel_values.device)
