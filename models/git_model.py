@@ -273,7 +273,7 @@ class GITFromScratch(nn.Module):
 
         self.vision = VisionTransformer(cfg.vision)
         self.proj = GITProjection(cfg.vision.hidden_size, cfg.hidden_size)
-        self.txt_embed = GITEmbeddings(cfg)
+        self.txt_embed = GITEmbeddings(cfg.vocab_size, cfg.max_text_length, cfg.hidden_size, cfg.pad_token_id)
         self.git_encoder = GITEncoder(cfg)
         self.lm_head = nn.Linear(cfg.hidden_size, cfg.vocab_size)
 
