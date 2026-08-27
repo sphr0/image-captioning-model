@@ -268,7 +268,7 @@ class GITProjection(nn.Module):
 
 class GITFromScratch(nn.Module):
     def __init__(self, cfg: GITConfig):
-        super().__init_()
+        super().__init__()
         self.cfg = cfg
 
         self.vision = VisionTransformer(cfg.vision)
