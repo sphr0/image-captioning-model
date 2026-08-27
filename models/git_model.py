@@ -277,11 +277,17 @@ class GITFromScratch(nn.Module):
         self.git_encoder = GITEncoder(cfg)
         self.lm_head = nn.Linear(cfg.hidden_size, cfg.vocab_size)
 
-    def forward(self, pixel_values, ids, pad_mask=None, labels=None):
+    def forward(self, pixel_values=None, ids=None, pad_mask=None, vision_tokens=None, labels=None):
+        # catch if we're given both or none
+        # training -> vision_token is None, generating -> pixel_values is None
+        assert (pixel_values is None) != (vision_tokens is None), "pass either vission_tokens or pixel_values"
+
         if pad_mask is None: # if no padding given, make all True mask
             pad_mask = torch.ones_like(ids, dtype=torch.bool)
 
-        vision_tokens = self.proj(self.vision(pixel_values))
+        if vision_tokens is None:
+            vision_tokens = self.proj(self.vision(pixel_values))
+
         txt_tokens = self.txt_embed(ids)
         x = torch.cat((vision_tokens, txt_tokens), dim=1)
 
@@ -313,10 +319,14 @@ class GITFromScratch(nn.Module):
         # 1. seed the sequence with BOS, one per batch item -> ids [B, 1]
         is_done = torch.zeros(B, dtype=torch.bool, device=pixel_values.device)
         # 2. loop up to max_new_tokens:
+
+        # To prevent calculating the same vision tokens on each loop
+        vision_tokens = self.proj(self.vision(pixel_values))
+
         for _ in range(max_new_tokens):
             # <NOTE> We ignore the two-output scenario for forward since we don't train
             # but implement something to handle that later...
-            logits = self(pixel_values, ids) # -> logits [B, cur_len, V]
+            logits = self(ids=ids, vision_tokens=vision_tokens) # -> logits [B, cur_len, V]
             # take the last position -> [B, V]
             next_logits = logits[:, -1, :]
             # pick a token id -> [B]
