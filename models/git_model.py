@@ -173,19 +173,19 @@ class PatchProjection(nn.Module):
 
 
 class VisionTransformer(nn.Module):
-    def __init__(self, cfg: GITConfig):
+    def __init__(self, cfg: VisionConfig):
         super().__init__()
-        assert cfg.vision.image_size % cfg.vision.patch_size == 0
-        num_patches = (cfg.vision.image_size // cfg.vision.patch_size) ** 2
+        assert cfg.image_size % cfg.patch_size == 0
+        num_patches = (cfg.image_size // cfg.patch_size) ** 2
 
-        self.patch_embedding = PatchProjection(cfg.vision.num_channels, 
-                                               cfg.vision.hidden_size, 
-                                               cfg.vision.patch_size)
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, cfg.vision.hidden_size))
-        self.pos_embedding = nn.Parameter(torch.zeros(1, num_patches + 1, cfg.vision.hidden_size))
-        self.pre_ln = nn.LayerNorm(cfg.vision.hidden_size, eps=1e-5)
-        self.blocks = nn.ModuleList([ViTBlock(cfg.vision) for _ in range(cfg.vision.num_layers)])
-        self.post_ln = nn.LayerNorm(cfg.vision.hidden_size, eps=1e-5)
+        self.patch_embedding = PatchProjection(cfg.num_channels, 
+                                               cfg.hidden_size, 
+                                               cfg.patch_size)
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, cfg.hidden_size))
+        self.pos_embedding = nn.Parameter(torch.zeros(1, num_patches + 1, cfg.hidden_size))
+        self.pre_ln = nn.LayerNorm(cfg.hidden_size, eps=1e-5)
+        self.blocks = nn.ModuleList([ViTBlock(cfg) for _ in range(cfg.num_layers)])
+        self.post_ln = nn.LayerNorm(cfg.hidden_size, eps=1e-5)
 
     def forward(self, x): # [B, num_channels, img_size, img_size]
         B = x.shape[0]
