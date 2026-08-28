@@ -309,12 +309,12 @@ class GITFromScratch(nn.Module):
         )
         return loss, logits
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def generate(self, pixel_values, max_new_tokens=20):
         bos_id = self.cfg.bos_token_id
         B = pixel_values.shape[0]
-        # decrease by 1 for the BOS token, which is accounted for with max_new_tokens arg
-        max_new_tokens = min(max_new_tokens, self.cfg.max_text_length - 1)
+        # decrease by 1 for the BOS token
+        max_new_tokens = min(max_new_tokens - 1, self.cfg.max_text_length - 1)
         ids = torch.full((B, 1), bos_id, dtype=torch.long, device=pixel_values.device)
         # 1. seed the sequence with BOS, one per batch item -> ids [B, 1]
         is_done = torch.zeros(B, dtype=torch.bool, device=pixel_values.device)
@@ -345,5 +345,23 @@ class GITFromScratch(nn.Module):
         return ids
 
 
-# <NOTE> change VisionTransformer cfg -> cfg.vision in next commit
-# why is tie_word_embeddings equal to False?
+# =============================
+# MODEL TEST
+
+def model_test():
+    cfg = GITConfig()
+    model = GITFromScratch(cfg)
+    B = 4
+    img_size = cfg.vision.image_size
+    text_len = 20
+
+    imgs = torch.rand((B, cfg.vision.num_channels, img_size, img_size))
+    ids = torch.randint(low=1, high=cfg.vocab_size, size=(B, text_len))
+
+    logits = model(imgs, ids)
+    print("logits shape:", logits.shape)
+    
+    caption = model.generate(imgs)
+    print("caption shape:", caption.shape)
+    print("caption:", caption)
+
