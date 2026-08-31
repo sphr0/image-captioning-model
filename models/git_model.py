@@ -365,3 +365,32 @@ def model_test():
     print("caption shape:", caption.shape)
     print("caption:", caption)
 
+
+# ==================================
+# TRANSFER LEARNING
+# ==================================
+
+from transformers import AutoProcessor, GitForCausalLM
+
+GEN_DEFAULTS = dict(num_beams=3,
+                    max_new_tokens=30,
+                    do_sample=False,
+                    no_repeat_ngram_size=2,
+                    repetition_penalty=1.1)
+
+def git_ckpt(large=False):
+    """
+    git-base-coco = False/0
+    git-large-coco = True/1
+    """
+    return "microsoft/git-large-coco" if large else "microsoft/git-base-coco"
+
+
+def load_git(large=False, device=None, dtype=torch.float16):
+    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device.type == "cpu" and dtype is torch.float16:
+        dtype = torch.float32 # better supported on cpu
+    
+    model = GitForCausalLM.from_pretrained(git_ckpt(large)).to(device, dtype=dtype).eval()
+    processor = AutoProcessor.from_pretrained(git_ckpt(large))
+    return model, processor
