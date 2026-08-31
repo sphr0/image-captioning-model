@@ -394,3 +394,32 @@ def load_git(large=False, device=None, dtype=torch.float16):
     model = GitForCausalLM.from_pretrained(git_ckpt(large)).to(device, dtype=dtype).eval()
     processor = AutoProcessor.from_pretrained(git_ckpt(large))
     return model, processor
+
+
+class GITCaptioner:
+    def __init__(self, large=False, device=None, dtype=torch.float16):
+        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.name = git_ckpt(large).split("/")[-1] # git-base-coco OR git-large-coco
+        self.model, self.proc = load_git(large, self.device, dtype)
+        self.dtype = next(self.model.parameters().dtype)
+
+    torch.no_grad()
+    def caption(self, images, prompt=None, **gen_kwargs):
+        if not isinstance(images, (list, tuple)):
+            images = [images]
+
+        pixel_values = self.proc(images=images, return_tensors="pt").pixel_values
+        pixel_values = pixel_values.to(self.device, self.dtype)
+        gen = {**GEN_DEFAULTS, **gen_kwargs}
+
+        if prompt is None:
+            out = self.model.generate(pixel_values=pixel_values, **gen)
+        else:
+            tok = self.proc.tokenizer
+            ids = [tok.cls_token_id] + tok(prompt, add_special_tokens=False).input_ids
+            input_ids = torch.tensor([ids], device=self.device).repeat(len(images), 1)
+            out = self.model.generate(pixel_values=pixel_values, input_ids=input_ids, **gen)
+        
+        # prompted decode includes prompt prefix, so we remove that
+        return [c.strip() for c in self.proc.batch_decode(out, skip_special_tokens=True)]
+
