@@ -388,7 +388,7 @@ def git_ckpt(large=False):
 
 def load_git(large=False, device=None, dtype=torch.float16):
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device.type == "cpu" and dtype is torch.float16:
+    if device == "cpu" and dtype is torch.float16:
         dtype = torch.float32 # better supported on cpu
     
     model = GitForCausalLM.from_pretrained(git_ckpt(large)).to(device, dtype=dtype).eval()
@@ -401,7 +401,7 @@ class GITCaptioner:
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.name = git_ckpt(large).split("/")[-1] # git-base-coco OR git-large-coco
         self.model, self.proc = load_git(large, self.device, dtype)
-        self.dtype = next(self.model.parameters().dtype)
+        self.dtype = next(self.model.parameters()).dtype
 
     torch.no_grad()
     def caption(self, images, prompt=None, **gen_kwargs):
