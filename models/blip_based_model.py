@@ -368,7 +368,6 @@ class BLIPFromScratch(nn.Module):
 
 from transformers import BlipForConditionalGeneration, BlipProcessor
 
-CHECKPOINT = "Salesforce/blip-image-captioning-base"
 ## defaults for comparing all 3 proposed models
 GEN_DEFAULTS = dict(num_beams=3,
                     max_new_tokens=30,
@@ -376,19 +375,26 @@ GEN_DEFAULTS = dict(num_beams=3,
                     no_repeat_ngram_size=2,
                     repetition_penalty=1.1)
 
-def load_blip(device, dtype=torch.float16):
+def blip_ckpt(large=False):
+    """
+    blip-base = False/0
+    blip-large = True/1
+    """
+    return "Salesforce/blip-image-captioning-large" if large else "Salesforce/blip-image-captioning-base"
+
+def load_blip(large=False, device=None, dtype=torch.float16):
+  CHECKPOINT = blip_ckpt(large)
   model = BlipForConditionalGeneration.from_pretrained(CHECKPOINT)
   model = model.to(device, dtype=dtype).eval()
   processor = BlipProcessor.from_pretrained(CHECKPOINT) # tokenizes inputs
   return model, processor
 
 class BLIPCaptioner:
-  name = "blip-base"
 
   def __init__(self, device=None, dtype=torch.float16):
       self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
       self.dtype = dtype
-      self.model, self.processor = load_blip(self.device, dtype)
+      self.model, self.processor = load_blip(True, self.device, dtype)
 
   @torch.no_grad()
   def caption(self, images, prompt=None, **gen_kwargs):
