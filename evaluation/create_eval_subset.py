@@ -2,12 +2,13 @@ import json
 import random
 
 dataset_path = "data/coco/annotations/captions_val2017.json"
+json_address = "evaluation/captions_train2017_subset1000.json"
 
 def create_subset(dataset_path=dataset_path,
                   seed=42,
                   n=1000,
                   create_json=True,
-                  json_address="evaluation/captions_train2017_subset1000.json"):
+                  json_address=json_address):
     """
     given the coco captions_val2017.json file, or a json using its
      structure, returns a subset of n samples and optionally creates
