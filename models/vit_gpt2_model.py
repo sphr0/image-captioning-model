@@ -278,9 +278,11 @@ class ViTGPT2FromScratch(nn.Module):
 from transformers import VisionEncoderDecoderModel, ViTImageProcessor, AutoTokenizer
  
  
-def build_vit_gpt2_pretrained(ckpt="nlpconnect/vit-gpt2-image-captioning", device="cpu"):
+def build_vit_gpt2_pretrained(ckpt="nlpconnect/vit-gpt2-image-captioning", device=None):
     """Encoder, decoder, AND cross-attention all pretrained. Use for inference and as
     the ViT-GPT2 entry in the three-way comparison."""
+    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     model = VisionEncoderDecoderModel.from_pretrained(ckpt).to(device).eval()
     image_processor = ViTImageProcessor.from_pretrained(ckpt)
     tokenizer = AutoTokenizer.from_pretrained(ckpt)
@@ -315,11 +317,32 @@ def build_vit_gpt2_for_finetune(
             p.requires_grad_(False)
  
     return model.to(device), image_processor, tokenizer
- 
- 
+
 @torch.no_grad()
-def caption(model, image_processor, tokenizer, images, device="cpu",
+def caption(model, image_processor, tokenizer, images, device=None,
             max_length=30, num_beams=4, **gen):
+    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     pixel_values = image_processor(images=images, return_tensors="pt").pixel_values.to(device)
     out = model.generate(pixel_values, max_length=max_length, num_beams=num_beams, **gen)
     return tokenizer.batch_decode(out, skip_special_tokens=True)
+
+
+class ViTGPT2Captioner:
+    def __init__(self, model=None, image_processor=None, tokenizer=None, device=None, **gen):
+        self.model, self.image_processor, self.tokenizer = build_vit_gpt2_pretrained()
+        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.gen = gen
+
+    def caption(self, image, **kwargs):
+        gen = {**self.gen, **kwargs}
+
+        captions = caption(
+            model=self.model,
+            image_processor=self.image_processor,
+            tokenizer=self.tokenizer,
+            images=image,
+            device=self.device,
+            **gen
+        )
+
+        return captions[0]
