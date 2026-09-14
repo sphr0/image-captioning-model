@@ -1,14 +1,14 @@
 import json
 from pathlib import Path
 
-def generate_captions(captioner, dataset, output_path):
+def generate_captions(captioner, dataset, output_path, defaults=dict()):
     preds = []
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     for i, sample in enumerate(dataset):
-        caption = captioner.caption(sample["image"])
+        caption = captioner.caption(sample["image"], **defaults)
 
         preds.append({
             "image_id": sample["image_id"],
