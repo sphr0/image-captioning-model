@@ -319,22 +319,24 @@ def build_vit_gpt2_for_finetune(
     return model.to(device), image_processor, tokenizer
 
 @torch.no_grad()
-def caption(model, image_processor, tokenizer, images, device=None,
-            max_length=30, num_beams=4, **gen):
+# def caption(model, image_processor, tokenizer, images, device=None,
+            # max_new_tokens=20, num_beams=3, **gen):
+def caption(model, image_processor, tokenizer, images, device=None, **gen):
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     pixel_values = image_processor(images=images, return_tensors="pt").pixel_values.to(device)
-    out = model.generate(pixel_values, max_length=max_length, num_beams=num_beams, **gen)
+    out = model.generate(pixel_values, **gen)
     return tokenizer.batch_decode(out, skip_special_tokens=True)
 
 
 class ViTGPT2Captioner:
-    def __init__(self, model=None, image_processor=None, tokenizer=None, device=None, **gen):
-        self.model, self.image_processor, self.tokenizer = build_vit_gpt2_pretrained()
+    def __init__(self, model=None, image_processor=None, tokenizer=None, device=None, gen=dict()):
+        if model is None:
+            model, image_processor, tokenizer = build_vit_gpt2_pretrained()
+        self.model, self.image_processor, self.tokenizer = model, image_processor, tokenizer
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.gen = gen
 
     def caption(self, image, **kwargs):
-        gen = {**self.gen, **kwargs}
 
         captions = caption(
             model=self.model,
@@ -342,7 +344,7 @@ class ViTGPT2Captioner:
             tokenizer=self.tokenizer,
             images=image,
             device=self.device,
-            **gen
+            **self.gen
         )
 
         return captions[0]
