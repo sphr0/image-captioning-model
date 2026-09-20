@@ -21,7 +21,7 @@ def load_references(ann_path):
         data = json.load(f)
     refs = defaultdict(list)
     for a in data["annotations"]:
-        refs[int(a["image_id"])].append([a["caption"]])
+        refs[int(a["image_id"])].append(a["caption"])
     return dict(refs)
 
 def load_predictions(path):
