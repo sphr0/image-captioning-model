@@ -10,6 +10,11 @@ COCO caption metrics + significance testing + diagnostics
 import json
 from collections import defaultdict
 
+from pycocoevalcap.bleu.bleu import Bleu
+from pycocoevalcap.meteor.meteor import Meteor
+from pycocoevalcap.rouge.rouge import Rouge
+from pycocoevalcap.cider.cider import Cider
+
 METRICS = ["Bleu_1", "Bleu4", "METEOR", "ROUGE_L", "CIDEr"]
 
 # =======================
@@ -35,3 +40,31 @@ def load_predictions(path):
             raise ValueError(f"Duplicate image_id {iid} in {path}")
         preds[iid] = p["caption"].pop().strip()
     return preds
+
+# =====================================
+# SCORING
+
+def score(gts_tok, res_tok):
+    """Returns corpus_scores and per_image_scores keyed by metric then image_id"""
+    ids = list(gts_tok.keys())
+    corpus, per_image = {}, {}
+
+    scorers = [
+        (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
+        (Meteor(), "METEOR"),
+        (Rouge(), "ROUGE_L"),
+        (Cider(), "CIDEr")
+    ]
+
+    for scorer, name in scorers:
+        s, ss = scorer.compute_score(gts_tok, res_tok)
+        if isinstance(name, list): # for BLEU
+            for n, sc, per_im in zip(name, s, ss):
+                corpus[n] = float(sc)
+                # dict of img ids mapped to their score in py float
+                per_image[n] = dict(zip(ids, [float(x) for x in per_im]))
+        else: # for non-BLEU
+            corpus[name] = float(s)
+            per_image[name] = dict(zip(ids, [float(x) for x in ss]))
+    
+    return corpus, per_image
