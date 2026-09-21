@@ -8,7 +8,8 @@ COCO caption metrics + significance testing + diagnostics
 # IMPORTS
 
 import json
-from collections import defaultdict
+from collections import defaultdict, Counter
+import numpy as np
 
 from pycocoevalcap.bleu.bleu import Bleu
 from pycocoevalcap.meteor.meteor import Meteor
@@ -68,3 +69,22 @@ def score(gts_tok, res_tok):
             per_image[name] = dict(zip(ids, [float(x) for x in ss]))
     
     return corpus, per_image
+
+# =============================
+# DIAGNOSTICS
+
+def diagnostics(res_tok, gts_tok):
+    caps = [res_tok[i][0] for i in res_tok] # list of just the caption
+    toks = [c.split() for c in caps] # list(list(word strings))
+    lens = np.array([len(t) for t in toks])
+
+    ref_lens = np.array([
+        np.mean([len(r.split()) for r in gts_tok[i]]) for i in gts_tok
+    ])
+
+    # def distinct(n):
+    # return n, len_mean, 
+    # len_std, len_p5 & p95, 
+    # ref_len_mean, vocab_size, 
+    # dup_caption_rate, 
+    # exact_match_rate, 
