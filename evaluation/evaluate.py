@@ -82,9 +82,11 @@ def diagnostics(res_tok, gts_tok):
         np.mean([len(r.split()) for r in gts_tok[i]]) for i in gts_tok
     ])
 
-    # def distinct(n):
-    # return n, len_mean, 
-    # len_std, len_p5 & p95, 
-    # ref_len_mean, vocab_size, 
-    # dup_caption_rate, 
-    # exact_match_rate, 
+    def distinct(n): # lexical diversity measure
+        """returns distinct-n of toks"""
+        grams = Counter()
+        # for each list of words, make up n-long tuples as keys for Counter and update it.
+        for t in toks:
+            grams.update(tuple(t[k: k+n]) for k in range(len(t) - n + 1))
+        total = sum(grams.values()) # total n-gram occurances, len(grams) = no. of unique n-grams
+        return len(grams) / total if total else 0.0
