@@ -125,3 +125,13 @@ def diagnostics(res_tok, gts_tok):
         "dup_caption_rate": 1 - len(set(caps)) / len(caps),
         "exact_ref_match_rate": exact_rate
     }
+
+
+def bootstrap_ci(per_image, ids, n_boot=2000, alpha=0.05, seed=42):
+    """returns scores mean, percentile low, percentile high"""
+    rng = np.random.default_rng(seed)
+    v = np.array([per_image[i] for i in ids])
+    idx = rng.integers(0, len(v), (n_boot, len(v)))
+    mean = v[idx].mean(axis=1)
+    lo, hi = np.percentile(mean, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+    return float(v.mean()), float(lo), float(hi)
