@@ -74,6 +74,21 @@ def score(gts_tok, res_tok):
 # DIAGNOSTICS
 
 def diagnostics(res_tok, gts_tok):
+    """
+    RETURNS:
+        n: number of evaluated caps
+        len_mean: avg num of tokens in caps
+        len_std: std through cap lengths
+        len_p5: bottom-5% cap length
+        len_p95: top-5% cap length
+        ref_len_mean: avg length of ground-truth caps
+        vocab_size: vocab size of all generated caps
+        distinct-1 & distinct-2: distinct measurements
+        dup_caption_rate: rate of exact generated caps
+         for different images
+        exact_ref_match_rate: rate of exact matches in
+         generated and reference caps
+    """
     caps = [res_tok[i][0] for i in res_tok] # list of just the caption
     toks = [c.split() for c in caps] # list(list(word strings))
     lens = np.array([len(t) for t in toks])
@@ -90,3 +105,23 @@ def diagnostics(res_tok, gts_tok):
             grams.update(tuple(t[k: k+n]) for k in range(len(t) - n + 1))
         total = sum(grams.values()) # total n-gram occurances, len(grams) = no. of unique n-grams
         return len(grams) / total if total else 0.0
+
+    # rate of exact matches in generated captions and ground-truth captions
+    # <NOTE> do we need the [0]? Must test later
+    exact_rate = sum(
+        1 for i in res_tok if res_tok[i][0] in set(gts_tok[i])
+    ) / len(res_tok)
+
+    return {
+        "n": len(caps),
+        "len_mean": float(lens.mean()),
+        "len_std": float(lens.std()),
+        "len_p5": float(np.percentile(lens, 5)),
+        "len_p95": float(np.percentile(lens, 95)),
+        "ref_len_mean": float(ref_lens.mean()),
+        "vocab_size": len({w for t in toks for w in t}),
+        "distinct_1": distinct(1),
+        "distinct_2": distinct(2),
+        "dup_caption_rate": 1 - len(set(caps)) / len(caps),
+        "exact_ref_match_rate": exact_rate
+    }
