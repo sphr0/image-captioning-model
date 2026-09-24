@@ -10,7 +10,9 @@ COCO caption metrics + significance testing + diagnostics
 import json
 from collections import defaultdict, Counter
 import numpy as np
+from pathlib import Path
 
+from pycocoevalcap.tokenizer.ptbtokenizer import PTBTokenizer
 from pycocoevalcap.bleu.bleu import Bleu
 from pycocoevalcap.meteor.meteor import Meteor
 from pycocoevalcap.rouge.rouge import Rouge
@@ -19,7 +21,7 @@ from pycocoevalcap.cider.cider import Cider
 METRICS = ["Bleu_1", "Bleu4", "METEOR", "ROUGE_L", "CIDEr"]
 
 # =======================
-# Loader Functions
+# LOADER FUNC
 
 def load_references(ann_path):
     """turn captions_val2017.json to python dict"""
@@ -147,3 +149,103 @@ def paired_bootstrap(a, b, ids, n_boot=2000, seed=42):
     avg_d = d[idx].mean(axis=1)
     return float(d.mean()), float((avg_d <= 0).mean())
 
+
+# =======================
+# REPORTS
+
+def final_report(annotations, preds, out="results/eval.json", n_boot=500):
+    """
+    
+    EXAMPLE:
+        annotations =
+            "data/captions.json"
+        preds =
+            ["vit_gpt2=preds/vit_gpt2.json",
+             "blip=preds/blip.json",
+             "git=preds/git.json"]
+        out = "results/eval.json"
+        n_boot = 1000
+    """
+    refs_all = load_references(annotations)
+    models = dict(p.split("=", 1) for p in preds)
+    loaded = {k: load_predictions(v) for k, v in models.items()}
+    common = set.intersection(*[set(p) for p in loaded.values()])
+    common &= set(refs_all)
+
+    # catch if no intersection OR not all intersections
+    if not common:
+        raise ValueError("No overlapping image_ids across models + annotations.")
+    for k, p in loaded.items():
+        if len(p) != len(common):
+            print(f"  [warn] {k}: {len(p)} preds -> {len(common)} after intersection")
+    ids = set(common)
+    print(f"Evaluating {len(ids)} images across {len(loaded)} models\n")
+
+    tok = PTBTokenizer()
+    gts_tok = tok.tokenize({i:[{"caption": c} for c in refs_all[i]] for i in ids})
+    results = {}
+
+    for name, preds in loaded.items():
+        print(f"==========< {name} >==========")
+        res_tok = tok.tokenize({i:[{"caption": preds[i]}] for i in ids})
+        corpus, per_image = score(gts_tok, res_tok)
+        results[name] = {
+            "corpus": corpus,
+            "per_image": per_image,
+            "diagnostics": diagnostics(res_tok, gts_tok)}
+
+    # ================
+    # REPORTS
+    print("\n" + "-" * 78)
+    print(f"{'model':<14}" + "".join(f"{m:>13}" for m in METRICS))
+    print("-" * 78)
+    for name, r in results.items():
+        row = f"{name:<14}"
+        for m in METRICS:
+            mean, lo, hi = bootstrap_ci(r["per_image"][m], ids, n_boot)
+            row += f"{mean:>13.4f}"
+            r.setdefault("ci", {})[m] = [lo, hi]
+        print(row)
+    print("=" * 78)
+
+    print("\n95% CI (paired bootstrap over images):")
+    for name, r in results.items():
+        print(f"  {name:<14}" + "  ".join(
+            f"{m} [{r['ci'][m][0]:.3f}, {r['ci'][m][1]:.3f}]" for m in ["Bleu_4", "CIDEr"]))
+    
+    print("\nDiagnostics:")
+    keys = ["len_mean", "ref_len_mean", "vocab_size", "distinct_2",
+            "dup_caption_rate", "exact_ref_match_rate"]
+    print(f"{'model':<14}" + "".join(f"{k:>22}" for k in keys))
+    for name, r in results.items():
+        d = r["diagnostics"]
+        print(f"{name:<14}" + "".join(f"{d[k]:>22.4f}" for k in keys))
+
+    print("\nPairwise (CIDEr), paired bootstrap:")
+    names = list(results)
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            a, b = names[i], names[j]
+            delta, p = paired_bootstrap(
+                results[a]["per_image"]["CIDEr"],
+                results[b]["per_image"]["CIDEr"], ids, n_boot)
+            verdict = "significant" if p < 0.05 or p > 0.95 else "NOT significant"
+            print(f"  {a} - {b}: {delta:+.4f}  p={p:.4f}  ({verdict})")
+
+    output_path = Path(out)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    for r in results.values():
+        r.pop("per_image")
+
+    with open(out, "w") as f:
+        json.dump({"n_images": len(ids), "models": results}, f, indent=2)
+    print(f"\n{out} has been written.")
+
+
+# <NOTE> must change subset number of data from 1k to 5k
+
+# final_report(annotations="captions_val2017_subset1000.json",
+#              preds=["vit_gpt2=predictions/vit_gpt_preds_universal_defaults.json",
+#                     "blip=predictions/blip_based_preds_universal_defaults.json",
+#                     "git=predictions/git_preds_universal_defaults.json"])
