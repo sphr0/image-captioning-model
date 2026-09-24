@@ -128,10 +128,22 @@ def diagnostics(res_tok, gts_tok):
 
 
 def bootstrap_ci(per_image, ids, n_boot=2000, alpha=0.05, seed=42):
-    """returns scores mean, percentile low, percentile high"""
+    """returns scores mean, percentile low, percentile high
+    from a bootstrap sample set"""
     rng = np.random.default_rng(seed)
     v = np.array([per_image[i] for i in ids])
     idx = rng.integers(0, len(v), (n_boot, len(v)))
     mean = v[idx].mean(axis=1)
     lo, hi = np.percentile(mean, [100 * alpha / 2, 100 * (1 - alpha / 2)])
     return float(v.mean()), float(lo), float(hi)
+
+
+def paired_bootstrap(a, b, ids, n_boot=2000, seed=42):
+    """returns avg score delta between a & b and 
+    avg bootstrap difference equal or greater than 0."""
+    rng = np.random.default_rng(seed)
+    d = np.array([a[i] - b[i] for i in ids]) # delta of model a & b per-img scores
+    idx = rng.integers(0, len(d), size=(n_boot, len(d)))
+    avg_d = d[idx].mean(axis=1)
+    return float(d.mean()), float((avg_d <= 0).mean())
+
