@@ -347,4 +347,4 @@ class ViTGPT2Captioner:
             **self.gen
         )
 
-        return captions[0]
+        return captions
