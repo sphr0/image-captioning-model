@@ -37,3 +37,9 @@ def create_subset(dataset_path=dataset_path,
             json.dump(subset, f, indent=2)
     
     return subset
+
+# create_subset(dataset_path=dataset_path,
+#                   seed=42,
+#                   n=5000,
+#                   create_json=True,
+#                   json_address="data/subsets/captions_val2017_subset5000.json")
