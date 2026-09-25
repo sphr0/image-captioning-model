@@ -18,7 +18,7 @@ from pycocoevalcap.meteor.meteor import Meteor
 from pycocoevalcap.rouge.rouge import Rouge
 from pycocoevalcap.cider.cider import Cider
 
-METRICS = ["Bleu_1", "Bleu4", "METEOR", "ROUGE_L", "CIDEr"]
+METRICS = ["Bleu_1", "Bleu_4", "METEOR", "ROUGE_L", "CIDEr"]
 
 # =======================
 # LOADER FUNC
@@ -41,7 +41,7 @@ def load_predictions(path):
         iid = int(p["image_id"])
         if iid in preds: # Catch if there are any duplicates
             raise ValueError(f"Duplicate image_id {iid} in {path}")
-        preds[iid] = p["caption"].pop().strip()
+        preds[iid] = p["caption"][0]
     return preds
 
 # =====================================
@@ -153,7 +153,7 @@ def paired_bootstrap(a, b, ids, n_boot=2000, seed=42):
 # =======================
 # REPORTS
 
-def final_report(annotations, preds, out="results/eval.json", n_boot=500):
+def final_report(annotations, preds, out="evaluation/results/eval.json", n_boot=500):
     """
     
     EXAMPLE:
@@ -244,8 +244,12 @@ def final_report(annotations, preds, out="results/eval.json", n_boot=500):
 
 
 # <NOTE> must change subset number of data from 1k to 5k
+# <NOTE> vit_gpt2 preds broken: 
+# `vit_gpt_preds_universal_defaults.json` has different format
 
-# final_report(annotations="captions_val2017_subset1000.json",
-#              preds=["vit_gpt2=predictions/vit_gpt_preds_universal_defaults.json",
-#                     "blip=predictions/blip_based_preds_universal_defaults.json",
-#                     "git=predictions/git_preds_universal_defaults.json"])
+# final_report(annotations="evaluation/captions_val2017_subset1000.json",
+#              preds=["vit_gpt2=evaluation/predictions/vit_gpt_preds_universal_defaults.json",
+#                     "blip=evaluation/predictions/blip_based_preds_universal_defaults.json",
+#                     "git=evaluation/predictions/git_preds_universal_defaults.json"])
+
+
