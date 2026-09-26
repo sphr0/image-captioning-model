@@ -5,7 +5,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 img_dir = "data/coco/val2017"
-json_path = "evaluation/captions_val2017_subset1000.json"
+json_path = "data/subsets/captions_val2017_subset5000.json"
 
 class EvalDataset(Dataset):
     def __init__(self, img_dir=img_dir, json_path=json_path):

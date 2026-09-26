@@ -247,9 +247,9 @@ def final_report(annotations, preds, out="evaluation/results/eval.json", n_boot=
 # <NOTE> vit_gpt2 preds broken: 
 # `vit_gpt_preds_universal_defaults.json` has different format
 
-# final_report(annotations="evaluation/captions_val2017_subset1000.json",
-#              preds=["vit_gpt2=evaluation/predictions/vit_gpt_preds_universal_defaults.json",
-#                     "blip=evaluation/predictions/blip_based_preds_universal_defaults.json",
-#                     "git=evaluation/predictions/git_preds_universal_defaults.json"])
-
-
+# final_report(annotations="data/subsets/captions_val2017_subset5000.json",
+#              preds=["vit_gpt2=evaluation/predictions/vit_gpt_preds_universal_defaults_5000.json",
+#                     "blip=evaluation/predictions/blip_based_preds_universal_defaults_5000.json",
+#                     "git=evaluation/predictions/git_preds_universal_defaults_5000.json"],
+#                     out="evaluation/results/eval_5000.json",
+#                     n_boot=2000)
