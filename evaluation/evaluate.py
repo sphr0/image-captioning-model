@@ -54,7 +54,7 @@ def load_img_paths(ann_path, imgs_dir):
     }
 
 # =====================================
-# SCORING
+# N-GRAM SCORING
 
 def score(gts_tok, res_tok, scorers_list):
     """Returns corpus_scores and per_image_scores keyed by metric then image_id"""
@@ -63,14 +63,6 @@ def score(gts_tok, res_tok, scorers_list):
 
     ids = list(gts_tok.keys())
     corpus, per_image = {}, {}
-
-    # this gets constructed on each call so we put it on a higher scope
-    # scorers = [ 
-    #     (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
-    #     (Meteor(), "METEOR"),
-    #     (Rouge(), "ROUGE_L"),
-    #     (Cider(), "CIDEr")
-    # ]
 
     for scorer, name in scorers_list:
         s, ss = scorer.compute_score(gts_tok, res_tok)
@@ -90,6 +82,7 @@ def score(gts_tok, res_tok, scorers_list):
 
 def diagnostics(res_tok, gts_tok):
     """
+    Corpus-level statistics that give deeper insight on metric results.
     RETURNS:
         n: number of evaluated caps
         len_mean: avg num of tokens in caps
@@ -141,6 +134,15 @@ def diagnostics(res_tok, gts_tok):
         "exact_ref_match_rate": exact_rate
     }
 
+
+# ==================================
+# CLIPScore + RefCLIPScore
+
+# clip_score func goes here
+
+
+# ==================================
+# BOOTSTRAP STATS
 
 def bootstrap_ci(per_image, ids, n_boot=2000, alpha=0.05, seed=42):
     """returns scores mean, percentile low, percentile high
