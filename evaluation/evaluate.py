@@ -18,6 +18,15 @@ from pycocoevalcap.meteor.meteor import Meteor
 from pycocoevalcap.rouge.rouge import Rouge
 from pycocoevalcap.cider.cider import Cider
 
+try:
+    import torch
+    import torch.nn.functional as F
+    import open_clip
+    from PIL import Image
+    _CLIP_OK = True
+except ImportError:
+    _CLIP_OK = False
+
 METRICS = ["Bleu_1", "Bleu_4", "METEOR", "ROUGE_L", "CIDEr"]
 
 # =======================
@@ -138,9 +147,45 @@ def diagnostics(res_tok, gts_tok):
 # ==================================
 # CLIPScore + RefCLIPScore
 
-# clip_score func goes here
+def open_clip_scores(preds,
+                refs, 
+                img_paths, 
+                ids,
+                device='cuda', 
+                model_name='ViT-L-14', 
+                pretrained='openai', 
+                batch_size=64):
 
+    precision = "fp16" if "cuda" in str(device) else "fp32"
+    model, _, preprocess = open_clip.create_model_and_transforms(model_name=model_name,
+                                                                 pretrained=pretrained, 
+                                                                 device=device, 
+                                                                 precision=precision)
+    model.eval()
+    tokenizer = open_clip.get_tokenizer(model_name=model_name)
+    fp_dtype = torch.float16 if precision == "fp16" else torch.float32
+    # pre-encoding all texts
+    all_ref_txts, all_ref_ids = [], []
+    for iid in ids:
+        for cap in refs[iid]:
+            all_ref_ids.append(iid)
+            all_ref_txts.append(cap)
 
+    ref_embeds_flat = []
+    with torch.no_grad():
+        for i in range(0, len(all_ref_txts), 256):
+            tok = tokenizer(all_ref_txts[i:i+256]).to(device)
+            emb = F.normalize(model.encode_text(tok), dim=-1)
+            ref_embeds_flat.append(emb.cpu().float())
+    ref_embeds_flat = torch.cat(ref_embeds_flat, dim=0)
+
+    ref_embeddings = {}
+    ptr = 0
+    for iid in ids:
+        n = len(refs[iid])
+        ref_embeddings[iid] = ref_embeds_flat[ptr:ptr+n]
+        ptr += n
+        
 # ==================================
 # BOOTSTRAP STATS
 
