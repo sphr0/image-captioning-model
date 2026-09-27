@@ -164,6 +164,7 @@ def open_clip_scores(preds,
     model.eval()
     tokenizer = open_clip.get_tokenizer(model_name=model_name)
     fp_dtype = torch.float16 if precision == "fp16" else torch.float32
+
     # pre-encoding all texts
     all_ref_txts, all_ref_ids = [], []
     for iid in ids:
@@ -185,7 +186,46 @@ def open_clip_scores(preds,
         n = len(refs[iid])
         ref_embeddings[iid] = ref_embeds_flat[ptr:ptr+n]
         ptr += n
-        
+
+    # main loop
+    clip_scores, refclip_scores = {}, {}
+    with torch.no_grad():
+        for i in range(0, len(ids), batch_size):
+            batch_ids = ids[i, i+batch_size]
+
+            imgs = torch.stack([ # img embeds
+                preprocess(Image.open(img_paths[iid]).convert("RGB")) for iid in batch_ids
+            ]).to(device, dtype=fp_dtype)
+            f_img = F.normalize(model.encode_image(imgs), dim=-1) # [B, D]
+
+            cands = [preds[iid] for iid in batch_ids] # candidate txt embeds
+            f_cand = F.normalize(
+                model.encode_text(tokenizer(cands).to(device)), dim=-1) # [B, D]
+
+            # CLIPScore = 2.5 x max(cos(img, cand), 0)
+            cos_ic = (f_img * f_cand).sum(-1).clamp(min=0) * 2.5 # [B]
+            cos_cr = torch.zeros(len(batch_ids)) # RefCLIPScore
+            for j, iid in enumerate(batch_ids):
+                f_refs = ref_embeddings[iid].to(device, dtype=fp_dtype)
+                cos_cr[j] = ((f_cand[j:j+1] * f_refs).sum(-1).clamp(min=0).max() * 2.5).cpu()
+
+            a = cos_ic.float().cpu()
+            b = cos_cr
+            denom = a + b
+            harmonic_mean = torch.where(denom > 0,
+                                 2 * a * b / denom,
+                                 torch.zeros_like(denom))
+            
+            for j, iid in enumerate(batch_ids):
+                clip_scores[iid] = float(a[j])
+                refclip_scores[iid] = float(harmonic_mean[j])
+    del model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    return clip_scores, refclip_scores
+
+
 # ==================================
 # BOOTSTRAP STATS
 
