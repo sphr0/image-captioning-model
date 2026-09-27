@@ -44,6 +44,15 @@ def load_predictions(path):
         preds[iid] = " ".join(p["caption"][0].split()) # removes the extra space and any \n that may exist
     return preds
 
+def load_img_paths(ann_path, imgs_dir):
+    """Build {image_id: Path} using coco-format json and img filenames"""
+    with open(ann_path) as f:
+        data = json.load(f)
+    img_folder = Path(imgs_dir)
+    return {
+        int(im["id"]): img_folder / im["file_name"] for im in data["images"]
+    }
+
 # =====================================
 # SCORING
 
