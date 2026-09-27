@@ -41,7 +41,7 @@ def load_predictions(path):
         iid = int(p["image_id"])
         if iid in preds: # Catch if there are any duplicates
             raise ValueError(f"Duplicate image_id {iid} in {path}")
-        preds[iid] = p["caption"][0]
+        preds[iid] = " ".join(p["caption"][0].split()) # removes the extra space and any \n that may exist
     return preds
 
 # =====================================
@@ -242,10 +242,6 @@ def final_report(annotations, preds, out="evaluation/results/eval.json", n_boot=
         json.dump({"n_images": len(ids), "models": results}, f, indent=2)
     print(f"\n{out} has been written.")
 
-
-# <NOTE> must change subset number of data from 1k to 5k
-# <NOTE> vit_gpt2 preds broken: 
-# `vit_gpt_preds_universal_defaults.json` has different format
 
 # final_report(annotations="data/subsets/captions_val2017_subset5000.json",
 #              preds=["vit_gpt2=evaluation/predictions/vit_gpt_preds_universal_defaults_5000.json",
