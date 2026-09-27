@@ -56,19 +56,23 @@ def load_img_paths(ann_path, imgs_dir):
 # =====================================
 # SCORING
 
-def score(gts_tok, res_tok):
+def score(gts_tok, res_tok, scorers_list):
     """Returns corpus_scores and per_image_scores keyed by metric then image_id"""
+    assert list(gts_tok.keys()) == list(res_tok.keys()), (
+        "gts_tok and res_tok key order is mismatched.")
+
     ids = list(gts_tok.keys())
     corpus, per_image = {}, {}
 
-    scorers = [
-        (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
-        (Meteor(), "METEOR"),
-        (Rouge(), "ROUGE_L"),
-        (Cider(), "CIDEr")
-    ]
+    # this gets constructed on each call so we put it on a higher scope
+    # scorers = [ 
+    #     (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
+    #     (Meteor(), "METEOR"),
+    #     (Rouge(), "ROUGE_L"),
+    #     (Cider(), "CIDEr")
+    # ]
 
-    for scorer, name in scorers:
+    for scorer, name in scorers_list:
         s, ss = scorer.compute_score(gts_tok, res_tok)
         if isinstance(name, list): # for BLEU
             for n, sc, per_im in zip(name, s, ss):
@@ -192,12 +196,18 @@ def final_report(annotations, preds, out="evaluation/results/eval.json", n_boot=
 
     tok = PTBTokenizer()
     gts_tok = tok.tokenize({i:[{"caption": c} for c in refs_all[i]] for i in ids})
-    results = {}
 
+    scorers_list = [
+    (Bleu(4),   ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
+    (Meteor(),  "METEOR"),
+    (Rouge(),   "ROUGE_L"),
+    (Cider(),   "CIDEr")]
+
+    results = {}
     for name, preds in loaded.items():
         print(f"==========< {name} >==========")
         res_tok = tok.tokenize({i:[{"caption": preds[i]}] for i in ids})
-        corpus, per_image = score(gts_tok, res_tok)
+        corpus, per_image = score(gts_tok, res_tok, scorers_list)
         results[name] = {
             "corpus": corpus,
             "per_image": per_image,
