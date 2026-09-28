@@ -155,6 +155,8 @@ def open_clip_scores(preds,
                 model_name='ViT-L-14', 
                 pretrained='openai', 
                 batch_size=64):
+    """compute CLIPScore and RefCLIPScore for every img in ids.
+    Returns ({image_id: clip_scores}, {image_id: refclip_scores})"""
 
     precision = "fp16" if "cuda" in str(device) else "fp32"
     model, _, preprocess = open_clip.create_model_and_transforms(model_name=model_name,
