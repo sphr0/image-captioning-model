@@ -62,6 +62,18 @@ def load_img_paths(ann_path, imgs_dir):
         int(im["id"]): img_folder / im["file_name"] for im in data["images"]
     }
 
+def load_instance_objects(instance_path):
+    """Turn instances_val2017 json to {image_id: set(coco_category_name)}.
+    Used for CHAIR as the ground-truth bounding-box annotation"""
+    with open(instance_path) as f:
+        data = json.load(f)
+    cat_map = {cat["id"]: cat["name"] for cat in data["categories"]}
+    objs = defaultdict(set)
+        # map image_id to category names
+    for ann in data["annotations"]:
+        objs[int(ann["image_id"])].add(cat_map[ann["category_id"]])
+    return dict(objs)
+
 # =====================================
 # N-GRAM SCORING
 
