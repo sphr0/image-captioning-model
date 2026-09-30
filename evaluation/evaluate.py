@@ -27,6 +27,8 @@ try:
 except ImportError:
     _CLIP_OK = False
 
+from coco_synonyms import COCO_SYNONYMS
+
 METRICS = ["Bleu_1", "Bleu_4", "METEOR", "ROUGE_L", "CIDEr"]
 
 # =======================
