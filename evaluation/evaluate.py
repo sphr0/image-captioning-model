@@ -242,6 +242,25 @@ def open_clip_scores(preds,
     return clip_scores, refclip_scores
 
 
+# ====================================
+# CHAIR
+
+def _build_reverse_lookup():
+    """Invert COCO_SYNONYMS to {word: category}"""
+    word_to_cat = {form: cat for cat, forms in COCO_SYNONYMS.items() for form in forms}
+    # to serve longer phrases first to CHAIR, we sort by word length  in descending order
+    # The lambda returns a tuple. If first vaue is equal, it will sort them alphabetically
+    phrases = sorted(word_to_cat, key=lambda p: (-len(p.split()), p))
+    return word_to_cat, phrases
+
+
+# def _mentioned_objects():
+    # """Extract the set of COCO categories in one tokenized caption"""
+
+
+# def chair(res_tok, image_objects):
+
+
 # ==================================
 # BOOTSTRAP STATS
 
