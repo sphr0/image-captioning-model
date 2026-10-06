@@ -254,8 +254,21 @@ def _build_reverse_lookup():
     return word_to_cat, phrases
 
 
-# def _mentioned_objects():
-    # """Extract the set of COCO categories in one tokenized caption"""
+def _mentioned_objects(cap_str, word_to_cat, phrases):
+    """Extract the set of COCO categories in one tokenized caption"""
+    words, found, i = cap_str.split(), set(), 0
+    while i < len(words):
+        matched = False
+        for phrase in phrases:
+            ptoks = phrase.split()
+            end = i + len(ptoks)
+            if words[i:end] == ptoks:
+                found.add(word_to_cat[phrase])
+                i, matched = end, True
+                break
+        if not matched:
+            i +=1
+    return found
 
 
 # def chair(res_tok, image_objects):
