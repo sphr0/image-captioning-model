@@ -208,7 +208,7 @@ def open_clip_scores(preds,
     clip_scores, refclip_scores = {}, {}
     with torch.no_grad():
         for i in range(0, len(ids), batch_size):
-            batch_ids = ids[i, i+batch_size]
+            batch_ids = ids[i:i+batch_size]
 
             imgs = torch.stack([ # img embeds
                 preprocess(Image.open(img_paths[iid]).convert("RGB")) for iid in batch_ids
