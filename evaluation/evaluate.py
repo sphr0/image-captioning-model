@@ -334,7 +334,7 @@ def paired_bootstrap(a, b, ids, n_boot=2000, seed=42):
 # =======================
 # REPORTS
 
-def final_report(annotations, preds, out="evaluation/results/eval.json", n_boot=500):
+def final_report(annotations, instances, images, clip_model, preds, out="evaluation/results/eval.json", n_boot=500):
     """
     
     EXAMPLE:
@@ -347,11 +347,23 @@ def final_report(annotations, preds, out="evaluation/results/eval.json", n_boot=
         out = "results/eval.json"
         n_boot = 1000
     """
+    # <NOTE> CHANGE THE ABOVE DOCSTRING
+    do_clip = images is not None
+    do_chair = instances is not None
+
+    if do_clip and not _CLIP_OK:
+        print("[warn] images given but open-clip-torch/torch not installed. \nSkipping CLIPScore...")
+        do_clip = False
+
+    if do_chair:
+        image_objects = load_instance_objects(instance_path=instances)
+    if do_clip:
+        image_paths = load_img_paths(ann_path=annotations, imgs_dir=images)
+
     refs_all = load_references(annotations)
     models = dict(p.split("=", 1) for p in preds)
     loaded = {k: load_predictions(v) for k, v in models.items()}
-    common = set.intersection(*[set(p) for p in loaded.values()])
-    common &= set(refs_all)
+    common = set.intersection(*[set(p) for p in loaded.values()]) & set(refs_all)
 
     # catch if no intersection OR not all intersections
     if not common:
@@ -359,7 +371,7 @@ def final_report(annotations, preds, out="evaluation/results/eval.json", n_boot=
     for k, p in loaded.items():
         if len(p) != len(common):
             print(f"  [warn] {k}: {len(p)} preds -> {len(common)} after intersection")
-    ids = set(common)
+    ids = sorted(common)
     print(f"Evaluating {len(ids)} images across {len(loaded)} models\n")
 
     tok = PTBTokenizer()
@@ -372,14 +384,27 @@ def final_report(annotations, preds, out="evaluation/results/eval.json", n_boot=
     (Cider(),   "CIDEr")]
 
     results = {}
+    res_toks = {}
+    
     for name, preds in loaded.items():
         print(f"==========< {name} >==========")
         res_tok = tok.tokenize({i:[{"caption": preds[i]}] for i in ids})
+        res_toks[name] = res_tok
         corpus, per_image = score(gts_tok, res_tok, scorers_list)
         results[name] = {
             "corpus": corpus,
             "per_image": per_image,
             "diagnostics": diagnostics(res_tok, gts_tok)}
+
+    # ================
+    # CHAIR
+    if do_chair:
+        print("\nRunning CHAIR")
+        for name in results:
+            ch = chair(res_toks[name], image_objects=)
+            results[name]["CHAIR"] = ch
+            print(f"  {name:<14}  CHAIR_i={ch['CHAIR_i']:.4f}  "
+                  f"CHAIR_s={ch['CHAIR_s']:.4f}")
 
     # ================
     # REPORTS
