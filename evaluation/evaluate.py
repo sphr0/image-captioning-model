@@ -30,6 +30,7 @@ except ImportError:
 from coco_synonyms import COCO_SYNONYMS
 
 METRICS = ["Bleu_1", "Bleu_4", "METEOR", "ROUGE_L", "CIDEr"]
+CLIP_METRICS = ["CLIPScore", "RefCLIPScore"]
 
 # =======================
 # LOADER FUNC
@@ -401,29 +402,61 @@ def final_report(annotations, instances, images, clip_model, preds, out="evaluat
     if do_chair:
         print("\nRunning CHAIR")
         for name in results:
-            ch = chair(res_toks[name], image_objects=)
+            ch = chair(res_toks[name], image_objects)
             results[name]["CHAIR"] = ch
             print(f"  {name:<14}  CHAIR_i={ch['CHAIR_i']:.4f}  "
                   f"CHAIR_s={ch['CHAIR_s']:.4f}")
 
     # ================
+    # CLIPScore & RefCLIPScore
+    if do_clip:
+        device = "cuda" if (_CLIP_OK and torch.cuda.is_available()) else "cpu"
+        print(f"\nRunning CLIPScore ({clip_model}, {device})...")
+        for name, preds in loaded.items():
+            print(f"  {name}...", end=" ", flush=True)
+            cs, rcs = open_clip_scores(preds=preds,
+                                       refs=refs_all,
+                                       img_paths=image_paths, 
+                                       ids=ids,
+                                       device=device,
+                                       model_name=clip_model)
+            results[name]["per_image"]["CLIPScore"] = cs
+            results[name]["per_image"]["RefCLIPScore"] = rcs
+            mean_cs = np.mean(list(cs.values()))
+            mean_rcs = np.mean(list(rcs.values()))
+            print(f"CLIPScore={mean_cs:.4f}  RefCLIPScore={mean_rcs:.4f}")
+
+    # ================
     # REPORTS
-    print("\n" + "-" * 78)
+    active_clip = CLIP_METRICS if do_clip else []
+    W = 14 + 13 * (len(METRICS) + len(active_clip))
+
+    print("\n" + "-" * W)
     print(f"{'model':<14}" + "".join(f"{m:>13}" for m in METRICS))
-    print("-" * 78)
+    print("-" * W)
     for name, r in results.items():
         row = f"{name:<14}"
         for m in METRICS:
-            mean, lo, hi = bootstrap_ci(r["per_image"][m], ids, n_boot)
-            row += f"{mean:>13.4f}"
-            r.setdefault("ci", {})[m] = [lo, hi]
+            row += f"{r['corpus'][m]:>13.4f}"
+        for m in active_clip:
+            mean_val = np.mean(list(r["per_image"][m].values()))
+            row += f"{mean_val:>13.4f}"
+            
         print(row)
-    print("=" * 78)
+    print("=" * W)
+    print("  BLEU/METEOR: corpus-level.  "
+          "CIDEr/ROUGE_L/CLIPScore: per-image mean.")
 
-    print("\n95% CI (paired bootstrap over images):")
+    # ======
+    # CI block
+    ci_metrics = ["Bleu_4", "CIDEr"] + active_clip
+    print(f"\n95% CI (per-image bootstrap):  {', '.join(ci_metrics)}")
     for name, r in results.items():
-        print(f"  {name:<14}" + "  ".join(
-            f"{m} [{r['ci'][m][0]:.3f}, {r['ci'][m][1]:.3f}]" for m in ["Bleu_4", "CIDEr"]))
+        parts = []
+        for m in ci_metrics:
+            _, lo, hi = bootstrap_ci(r["per_image"][m], ids, n_boot)
+            parts.append(f"{m} [{lo:.3f},{hi:.3f}]")
+        print(f"  {name:<14} " + "  ".join(parts))
     
     print("\nDiagnostics:")
     keys = ["len_mean", "ref_len_mean", "vocab_size", "distinct_2",
@@ -433,25 +466,61 @@ def final_report(annotations, instances, images, clip_model, preds, out="evaluat
         d = r["diagnostics"]
         print(f"{name:<14}" + "".join(f"{d[k]:>22.4f}" for k in keys))
 
-    print("\nPairwise (CIDEr), paired bootstrap:")
-    names = list(results)
-    for i in range(len(names)):
-        for j in range(i + 1, len(names)):
-            a, b = names[i], names[j]
-            delta, p = paired_bootstrap(
-                results[a]["per_image"]["CIDEr"],
-                results[b]["per_image"]["CIDEr"], ids, n_boot)
-            verdict = "significant" if p < 0.05 or p > 0.95 else "NOT significant"
-            print(f"  {a} - {b}: {delta:+.4f}  p={p:.4f}  ({verdict})")
+    print("\n=====<Pairwise Bootstrap>=====")
+    for label, metric in [("CIDEr", "CIDEr")] + (
+        [("CLIPScore", "CLIPScore")] if do_clip else []):
+        print(f"\nPairwise {label}, paired bootstrap:")
+        names = list(results)
+        for i in range(len(names)):
+            for j in range(i + 1, len(names)):
+                a, b = names[i], names[j]
+                delta, p = paired_bootstrap(
+                    results[a]["per_image"][metric],
+                    results[b]["per_image"][metric], ids, n_boot)
+                verdict = "significant" if p < 0.05 or p > 0.95 else "NOT significant"
+                print(f"  {a} - {b}: {delta:+.4f}  p={p:.4f}  ({verdict})")
 
+    if do_chair:
+        print(f"\nCHAIR:\n{'model':<14}{'CHAIR_i':>12}{'CHAIR_s':>12}")
+        for name, r in results.items():
+            print(f"{name:<14}{ch['CHAIR_i']:>12.4f}{ch['CHAIR_s']:>12.4f}")
+
+
+    # Saving
     output_path = Path(out)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    for r in results.values():
-        r.pop("per_image")
+    # saving per_image outputs as well
+    per_img_out = out.with_name(out.stem + "_per_image.json")
+    per_img_reports = {
+        name: {
+            m: r["per_image"][m]
+            for m in list(METRICS) + active_clip
+            if m in r["per_image"]
+        }
+        for name, r in results.items()
+    }
+    with open(per_img_out, "w") as f:
+        json.dump({"n_images": len(ids), "models": per_img_reports}, f, indent=2)
+    print(f"\n {per_img_out} has been written.")
+
+    # summary JSON = corpus scores + diagnostics + CHAIR aggregates (no per-image)
+    summary = {}
+    for name, r in results.items():
+        entry = {"corpus": r["corpus"], "diagnostics": r["diagnostics"]}
+        if do_clip:
+            entry["clip_mean"] = {
+                m: float(np.mean(list(r["per_image"][m].values())))
+                for m in CLIP_METRICS
+            }
+        if do_chair:
+            # strip the bulky per_image dict from the summary file
+            entry["chair"] = {k: v for k, v in r["chair"].items()
+                              if k != "per_image"}
+        summary[name] = entry
 
     with open(out, "w") as f:
-        json.dump({"n_images": len(ids), "models": results}, f, indent=2)
+        json.dump({"n_images": len(ids), "models": summary}, f, indent=2)
     print(f"\n{out} has been written.")
 
 
