@@ -271,7 +271,38 @@ def _mentioned_objects(cap_str, word_to_cat, phrases):
     return found
 
 
-# def chair(res_tok, image_objects):
+def chair(res_tok, image_objects):
+    """
+    Compute CHAIR_i and CHAIR_s. CHAIR_i shows how badly each cap
+    hallucinates. CHAIR_s shows how often does hallucination occur
+    in the corpus.
+    """
+    word_to_cat, phrases = _build_reverse_lookup()
+    per_image_chair = {}
+    chair_i_vals = []
+    hallu_cap_count = 0
+
+    for iid, cap_list in res_tok.items():
+        cap = cap_list[0]
+        mentioned_objs = _mentioned_objects(cap, word_to_cat, phrases)
+        gt_objs = image_objects.get(iid, set()) # return set if no match
+        hallucinated = mentioned_objs - gt_objs
+
+        ci = len(hallucinated) / len(mentioned_objs) if mentioned_objs else 0.0
+        chair_i_vals.append(ci)
+        per_image_chair[iid] = {
+             "chair_i": ci,
+             "mentioned": sorted(mentioned_objs),
+             "hallucinated": sorted(hallucinated)
+        }
+        hallu_cap_count += 1 if hallucinated else None
+
+    return {
+        "CHAIR_i": float(np.mean(chair_i_vals)) if chair_i_vals else 0.0,
+        "CHAIR_s": hallu_cap_count / len(res_tok) if res_tok else 0.0,
+        "per_image": per_image_chair
+    }
+
 
 
 # ==================================
