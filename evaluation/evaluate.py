@@ -405,7 +405,7 @@ def final_report(annotations, instances, images, clip_model, preds, out="evaluat
         print("\nRunning CHAIR")
         for name in results:
             ch = chair(res_toks[name], image_objects)
-            results[name]["CHAIR"] = ch
+            results[name]["chair"] = ch
             print(f"  {name:<14}  CHAIR_i={ch['CHAIR_i']:.4f}  "
                   f"CHAIR_s={ch['CHAIR_s']:.4f}")
 
@@ -493,7 +493,7 @@ def final_report(annotations, instances, images, clip_model, preds, out="evaluat
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # saving per_image outputs as well
-    per_img_out = out.with_name(out.stem + "_per_image.json")
+    per_img_out = "".join(out.split(".")[0]) + "_per_image.json"
     per_img_reports = {
         name: {
             m: r["per_image"][m]
