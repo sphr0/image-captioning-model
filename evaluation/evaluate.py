@@ -298,7 +298,8 @@ def chair(res_tok, image_objects):
              "mentioned": sorted(mentioned_objs),
              "hallucinated": sorted(hallucinated)
         }
-        hallu_cap_count += 1 if hallucinated else None
+        if hallucinated:
+            hallu_cap_count += 1
 
     return {
         "CHAIR_i": float(np.mean(chair_i_vals)) if chair_i_vals else 0.0,
@@ -339,16 +340,17 @@ def final_report(annotations, instances, images, clip_model, preds, out="evaluat
     """
     
     EXAMPLE:
-        annotations =
-            "data/captions.json"
-        preds =
-            ["vit_gpt2=preds/vit_gpt2.json",
-             "blip=preds/blip.json",
-             "git=preds/git.json"]
-        out = "results/eval.json"
-        n_boot = 1000
+        annotations="data/subsets/captions_val2017_subset5000.json",
+        instances="data/coco/annotations/instances_val2017.json",
+        images="data/coco/val2017",
+        clip_model="ViT-L-14",
+        preds=["vit_gpt2=evaluation/predictions/vit_gpt_preds_universal_defaults_5000.json",
+               "blip=evaluation/predictions/blip_based_preds_universal_defaults_5000.json",
+               "git=evaluation/predictions/git_preds_universal_defaults_5000.json"],
+        out="evaluation/results/eval_5000.json",
+        n_boot=2000
     """
-    # <NOTE> CHANGE THE ABOVE DOCSTRING
+
     do_clip = images is not None
     do_chair = instances is not None
 
@@ -525,6 +527,9 @@ def final_report(annotations, instances, images, clip_model, preds, out="evaluat
 
 
 # final_report(annotations="data/subsets/captions_val2017_subset5000.json",
+#              instances="data/coco/annotations/instances_val2017.json",
+#              images="data/coco/val2017",
+#              clip_model="ViT-L-14",
 #              preds=["vit_gpt2=evaluation/predictions/vit_gpt_preds_universal_defaults_5000.json",
 #                     "blip=evaluation/predictions/blip_based_preds_universal_defaults_5000.json",
 #                     "git=evaluation/predictions/git_preds_universal_defaults_5000.json"],
