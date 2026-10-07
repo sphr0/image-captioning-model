@@ -276,6 +276,8 @@ def chair(res_tok, image_objects):
     Compute CHAIR_i and CHAIR_s. CHAIR_i shows how badly each cap
     hallucinates. CHAIR_s shows how often does hallucination occur
     in the corpus.
+    returns:
+        {CHAIR_i, CHAIR_s, per_image}
     """
     word_to_cat, phrases = _build_reverse_lookup()
     per_image_chair = {}
