@@ -452,7 +452,7 @@ def final_report(annotations, instances, images, clip_model, preds, out="evaluat
     # ======
     # CI block
     ci_metrics = ["Bleu_4", "CIDEr"] + active_clip
-    print(f"\n95% CI (per-image bootstrap):  {', '.join(ci_metrics)}")
+    print(f"\n95% CI (mean per-image bootstrap):  {', '.join(ci_metrics)}")
     for name, r in results.items():
         parts = []
         for m in ci_metrics:
