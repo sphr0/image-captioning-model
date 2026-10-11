@@ -330,7 +330,7 @@ def paired_bootstrap(a, b, ids, n_boot=2000, seed=42):
     d = np.array([a[i] - b[i] for i in ids]) # delta of model a & b per-img scores
     idx = rng.integers(0, len(d), size=(n_boot, len(d)))
     avg_d = d[idx].mean(axis=1)
-    return float(d.mean()), float((avg_d <= 0).mean())
+    return float(d.mean()), float((avg_d >= 0).mean())
 
 
 # =======================
