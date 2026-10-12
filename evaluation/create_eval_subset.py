@@ -77,8 +77,10 @@ def create_subset(dataset_path=COCO_PATH,
     
     return subset
 
-create_subset(dataset_path=COCO_PATH,
-              karpathy_path=KARPATHY_PATH,
-              seed=42,
-              n=None,
-              out_dir="data/subsets/captions_val2017_CLEAN.json")
+# create_subset(dataset_path=COCO_PATH,
+#               karpathy_path=KARPATHY_PATH,
+#               seed=42,
+#               n=None,
+#               out_dir="data/subsets/captions_val2017_CLEAN.json")
+
+# <NOTE> Total clean images = 1201
