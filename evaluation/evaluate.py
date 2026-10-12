@@ -526,12 +526,12 @@ def final_report(annotations, instances, images, clip_model, preds, out="evaluat
     print(f"\n{out} has been written.")
 
 
-# final_report(annotations="data/subsets/captions_val2017_subset5000.json",
+# final_report(annotations="data/subsets/captions_val2017_CLEAN.json",
 #              instances="data/coco/annotations/instances_val2017.json",
 #              images="data/coco/val2017",
 #              clip_model="ViT-L-14",
-#              preds=["vit_gpt2=evaluation/predictions/vit_gpt_preds_universal_defaults_5000.json",
-#                     "blip=evaluation/predictions/blip_based_preds_universal_defaults_5000.json",
-#                     "git=evaluation/predictions/git_preds_universal_defaults_5000.json"],
-#                     out="evaluation/results/eval_5000.json",
-#                     n_boot=2000)
+#              preds=["vit_gpt2=evaluation/predictions/vit_gpt_preds_universal_defaults_CLEAN.json",
+#                     "blip=evaluation/predictions/blip_based_preds_universal_defaults_CLEAN.json",
+#                     "git=evaluation/predictions/git_preds_universal_defaults_CLEAN.json"],
+#              out="evaluation/results/eval_CLEAN.json",
+#              n_boot=10000)
