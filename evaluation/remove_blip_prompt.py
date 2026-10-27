@@ -21,9 +21,9 @@ import json
 from pathlib import Path
 
 
-def clean_captions(caption_path="evaluation/predictions/blip_based_preds_universal_defaults_CLEAN.json", 
+def clean_captions(caption_path="evaluation/predictions/blip_based_preds_optimized_defaults_CLEAN.json", 
                    prefix="a picture of ", 
-                   output_path="evaluation/predictions/blip_based_preds_universal_defaults_CLEAN.json"):
+                   output_path="evaluation/predictions/blip_based_preds_optimized_defaults_CLEAN.json"):
     """remove the prmopt given to BLIP's model.
     Generating captions with no prompt to BLIP's 
     coco-finetuned model will result in it adding 

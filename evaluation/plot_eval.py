@@ -38,8 +38,8 @@ from matplotlib.patches import Patch
 # Fixed identity: display name, order and colour per model. Colour follows the
 # model in every figure, so "BLIP is orange" is learned once.
 # --------------------------------------------------------------------------
-MODELS = {"vit_gpt2": "ViT-GPT2", "blip": "BLIP-base", "git": "GIT-base"}
-PALETTE = {"ViT-GPT2": "#2a78d6", "BLIP-base": "#eb6834", "GIT-base": "#1baf7a"}
+MODELS = {"vit_gpt2": "ViT-GPT2", "blip": "BLIP-large", "git": "GIT-large"}
+PALETTE = {"ViT-GPT2": "#2a78d6", "BLIP-large": "#eb6834", "GIT-large": "#1baf7a"}
 ORDER = list(PALETTE)
 
 SURFACE, INK, INK_2, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df"

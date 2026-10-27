@@ -530,8 +530,8 @@ def final_report(annotations, instances, images, clip_model, preds, out="evaluat
 #              instances="data/coco/annotations/instances_val2017.json",
 #              images="data/coco/val2017",
 #              clip_model="ViT-L-14",
-#              preds=["vit_gpt2=evaluation/predictions/vit_gpt_preds_universal_defaults_CLEAN.json",
-#                     "blip=evaluation/predictions/blip_based_preds_universal_defaults_CLEAN.json",
-#                     "git=evaluation/predictions/git_preds_universal_defaults_CLEAN.json"],
-#              out="evaluation/results/eval_CLEAN.json",
+#              preds=["vit_gpt2=evaluation/predictions/vit_gpt_preds_optimized_defaults_CLEAN.json",
+#                     "blip=evaluation/predictions/blip_based_preds_optimized_defaults_CLEAN.json",
+#                     "git=evaluation/predictions/git_preds_optimized_defaults_CLEAN.json"],
+#              out="evaluation/results/eval_optimized_defaults_CLEAN.json",
 #              n_boot=10000)
